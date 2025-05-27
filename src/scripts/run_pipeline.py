@@ -2,10 +2,10 @@ import argparse
 import sys
 from pathlib import Path
 
+sys.path.append(str(Path(__file__).parent.parent.parent))
+
 from src.config import get_settings
 from src.data_processing import DataPipeline
-
-sys.path.append(str(Path(__file__).parent.parent))
 
 
 def parse_args() -> argparse.Namespace:
