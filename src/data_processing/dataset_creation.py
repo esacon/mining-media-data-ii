@@ -2,12 +2,17 @@ import json
 from pathlib import Path
 from typing import Dict, Optional, Union
 
-from src.utils import (
-    LoggerMixin, ensure_dir, jsonl_iterator, save_json,
-    get_time_boundaries, calculate_dataset_stats, convert_timestamp,
-    _get_player_id_from_record
-)
 from src.config import Settings
+from src.utils import (
+    LoggerMixin,
+    _get_player_id_from_record,
+    calculate_dataset_stats,
+    convert_timestamp,
+    ensure_dir,
+    get_time_boundaries,
+    jsonl_iterator,
+    save_json,
+)
 
 
 class DatasetCreator(LoggerMixin):
@@ -50,9 +55,7 @@ class DatasetCreator(LoggerMixin):
 
         first_time = records[0]["time"]
         boundaries = get_time_boundaries(
-            first_time,
-            self.observation_days,
-            self.churn_period_days
+            first_time, self.observation_days, self.churn_period_days
         )
 
         observation_records = []
@@ -60,11 +63,11 @@ class DatasetCreator(LoggerMixin):
 
         for record in records:
             record_time = record["time"]
-            record_dt = convert_timestamp(record_time, 'datetime')
+            record_dt = convert_timestamp(record_time, "datetime")
 
-            if record_dt <= boundaries['op_end']:
+            if record_dt <= boundaries["op_end"]:
                 observation_records.append(record)
-            elif boundaries['cp_start'] < record_dt <= boundaries['cp_end']:
+            elif boundaries["cp_start"] < record_dt <= boundaries["cp_end"]:
                 churn_period_records.append(record)
 
         if not observation_records:
@@ -79,12 +82,12 @@ class DatasetCreator(LoggerMixin):
             "observation_records": observation_records,
             "churn_period_records": churn_period_records,
             "churned": churned,
-            "op_start": boundaries['op_start_iso'],
-            "op_end": boundaries['op_end_iso'],
-            "cp_start": boundaries['cp_start_iso'],
-            "cp_end": boundaries['cp_end_iso'],
+            "op_start": boundaries["op_start_iso"],
+            "op_end": boundaries["op_end_iso"],
+            "cp_start": boundaries["cp_start_iso"],
+            "cp_end": boundaries["cp_end_iso"],
             "op_event_count": len(observation_records),
-            "cp_event_count": len(churn_period_records)
+            "cp_event_count": len(churn_period_records),
         }
 
     def create_dataset(self, input_file: Union[str, Path], output_prefix: str) -> Path:
@@ -111,7 +114,7 @@ class DatasetCreator(LoggerMixin):
         processed_count = 0
         skipped_count = 0
 
-        with open(output_path, 'w', encoding='utf-8') as f_out:
+        with open(output_path, "w", encoding="utf-8") as f_out:
             for line_num, player_data in enumerate(jsonl_iterator(input_path)):
                 if (line_num + 1) % 1000 == 0:
                     self.logger.info(f"Processed {line_num + 1} players...")
@@ -120,19 +123,22 @@ class DatasetCreator(LoggerMixin):
                     processed_data = self.process_player_records(player_data)
 
                     if processed_data:
-                        f_out.write(json.dumps(processed_data,
-                                    ensure_ascii=False) + '\n')
+                        f_out.write(
+                            json.dumps(processed_data, ensure_ascii=False) + "\n"
+                        )
                         processed_count += 1
                     else:
                         skipped_count += 1
 
                 except Exception as e:
                     self.logger.warning(
-                        f"Error processing line {line_num + 1} in {input_file}: {e}")
+                        f"Error processing line {line_num + 1} in {input_file}: {e}"
+                    )
                     skipped_count += 1
 
         self.logger.info(
-            f"Finished processing {input_file}. Total processed: {processed_count}, Skipped: {skipped_count}")
+            f"Finished processing {input_file}. Total processed: {processed_count}, Skipped: {skipped_count}"
+        )
         return output_path
 
     def create_all_datasets(self) -> Dict[str, Dict[str, str]]:
@@ -151,12 +157,12 @@ class DatasetCreator(LoggerMixin):
         datasets_to_process = {
             "game1": {
                 "train": self.settings.game1_train,
-                "eval": self.settings.game1_eval
+                "eval": self.settings.game1_eval,
             },
             "game2": {
                 "train": self.settings.game2_train,
-                "eval": self.settings.game2_eval
-            }
+                "eval": self.settings.game2_eval,
+            },
         }
 
         results = {}

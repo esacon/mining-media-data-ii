@@ -1,6 +1,7 @@
 import argparse
 import sys
 from pathlib import Path
+
 from src.config import get_settings
 from src.data_processing import DataPipeline
 
@@ -13,62 +14,60 @@ def parse_args() -> argparse.Namespace:
     Returns:
         argparse.Namespace: An object containing the parsed arguments.
     """
-    parser = argparse.ArgumentParser(
-        description="Run churn prediction data pipeline"
-    )
+    parser = argparse.ArgumentParser(description="Run churn prediction data pipeline")
 
     parser.add_argument(
         "--config",
         type=str,
         default=None,
-        help="Path to a custom config.yaml file. Defaults to project root/config.yaml."
+        help="Path to a custom config.yaml file. Defaults to project root/config.yaml.",
     )
 
     parser.add_argument(
         "--data-dir",
         type=str,
         default=None,
-        help="Override the base data directory from the config file."
+        help="Override the base data directory from the config file.",
     )
 
     parser.add_argument(
         "--output-dir",
         type=str,
         default=None,
-        help="Override the processed data output directory from the config file."
+        help="Override the processed data output directory from the config file.",
     )
 
     parser.add_argument(
         "--observation-days",
         type=int,
         default=None,
-        help="Override the observation period in days from the config file."
+        help="Override the observation period in days from the config file.",
     )
 
     parser.add_argument(
         "--churn-days",
         type=int,
         default=None,
-        help="Override the churn prediction period in days from the config file."
+        help="Override the churn prediction period in days from the config file.",
     )
 
     parser.add_argument(
         "--log-level",
         type=str,
         default=None,
-        help="Override the logging level (e.g., 'INFO', 'DEBUG') from the config file."
+        help="Override the logging level (e.g., 'INFO', 'DEBUG') from the config file.",
     )
 
     parser.add_argument(
         "--prep-only",
         action="store_true",
-        help="Run only the data preparation step (conversion and splitting)."
+        help="Run only the data preparation step (conversion and splitting).",
     )
 
     parser.add_argument(
         "--create-only",
         action="store_true",
-        help="Run only the dataset creation step (requires data preparation to be completed)."
+        help="Run only the dataset creation step (requires data preparation to be completed).",
     )
 
     return parser.parse_args()

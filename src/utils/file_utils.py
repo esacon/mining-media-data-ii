@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Union, Dict, Any
+from typing import Any, Dict, Union
 
 
 def ensure_dir(path: Union[str, Path]) -> Path:
@@ -17,7 +17,7 @@ def ensure_dir(path: Union[str, Path]) -> Path:
     return path
 
 
-def get_file_size(file_path: Union[str, Path], unit: str = 'MB') -> float:
+def get_file_size(file_path: Union[str, Path], unit: str = "MB") -> float:
     """Gets the size of a file in a specified unit.
 
     Args:
@@ -34,12 +34,7 @@ def get_file_size(file_path: Union[str, Path], unit: str = 'MB') -> float:
 
     size_bytes = path.stat().st_size
 
-    units = {
-        'B': 1,
-        'KB': 1024,
-        'MB': 1024**2,
-        'GB': 1024**3
-    }
+    units = {"B": 1, "KB": 1024, "MB": 1024**2, "GB": 1024**3}
 
     return size_bytes / units.get(unit.upper(), 1)
 
@@ -57,7 +52,7 @@ def count_lines(file_path: Union[str, Path]) -> int:
     if not path.exists():
         return 0
 
-    with open(path, 'r', encoding='utf-8') as f:
+    with open(path, "r", encoding="utf-8") as f:
         return sum(1 for _ in f)
 
 
@@ -77,21 +72,25 @@ def get_file_info(file_path: Union[str, Path]) -> Dict[str, Any]:
 
     if not path.exists():
         return {
-            'exists': False,
-            'size_mb': 0,
-            'lines': 0,
-            'extension': None,
-            'name': path.name,
-            'parent': str(path.parent)
+            "exists": False,
+            "size_mb": 0,
+            "lines": 0,
+            "extension": None,
+            "name": path.name,
+            "parent": str(path.parent),
         }
 
     return {
-        'exists': True,
-        'size_mb': get_file_size(path, 'MB'),
-        'lines': count_lines(path) if path.suffix in ['.txt', '.csv', '.jsonl', '.json'] else None,
-        'extension': path.suffix,
-        'name': path.name,
-        'parent': str(path.parent)
+        "exists": True,
+        "size_mb": get_file_size(path, "MB"),
+        "lines": (
+            count_lines(path)
+            if path.suffix in [".txt", ".csv", ".jsonl", ".json"]
+            else None
+        ),
+        "extension": path.suffix,
+        "name": path.name,
+        "parent": str(path.parent),
     }
 
 
@@ -105,4 +104,4 @@ def safe_filename(filename: str) -> str:
         str: The safe filename.
     """
     safe_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_."
-    return ''.join(c if c in safe_chars else '_' for c in filename)
+    return "".join(c if c in safe_chars else "_" for c in filename)

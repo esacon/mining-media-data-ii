@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Union, Optional
+from typing import Optional, Union
 
 
 def detect_time_format(timestamp: Union[int, float]) -> str:
@@ -16,12 +16,14 @@ def detect_time_format(timestamp: Union[int, float]) -> str:
         str: 'seconds' if the timestamp is likely in seconds, 'milliseconds' otherwise.
     """
     if timestamp > 1e10:  # Roughly timestamps after early 2001 are in milliseconds
-        return 'milliseconds'
+        return "milliseconds"
     else:
-        return 'seconds'
+        return "seconds"
 
 
-def convert_timestamp(timestamp: Union[int, float], to_format: str = 'datetime') -> Union[datetime, int, float]:
+def convert_timestamp(
+    timestamp: Union[int, float], to_format: str = "datetime"
+) -> Union[datetime, int, float]:
     """Converts a Unix timestamp to different formats.
 
     Args:
@@ -37,22 +39,24 @@ def convert_timestamp(timestamp: Union[int, float], to_format: str = 'datetime')
     """
     current_format = detect_time_format(timestamp)
 
-    if current_format == 'milliseconds':
+    if current_format == "milliseconds":
         dt = datetime.fromtimestamp(timestamp / 1000)
     else:
         dt = datetime.fromtimestamp(timestamp)
 
-    if to_format == 'datetime':
+    if to_format == "datetime":
         return dt
-    elif to_format == 'seconds':
+    elif to_format == "seconds":
         return int(dt.timestamp())
-    elif to_format == 'milliseconds':
+    elif to_format == "milliseconds":
         return int(dt.timestamp() * 1000)
     else:
         raise ValueError(f"Unsupported format: {to_format}")
 
 
-def format_timestamp(timestamp: Union[int, float], format_string: str = '%Y-%m-%d %H:%M:%S') -> str:
+def format_timestamp(
+    timestamp: Union[int, float], format_string: str = "%Y-%m-%d %H:%M:%S"
+) -> str:
     """Formats a Unix timestamp into a human-readable string.
 
     Args:
@@ -63,11 +67,13 @@ def format_timestamp(timestamp: Union[int, float], format_string: str = '%Y-%m-%
     Returns:
         str: The formatted timestamp string.
     """
-    dt = convert_timestamp(timestamp, 'datetime')
+    dt = convert_timestamp(timestamp, "datetime")
     return dt.strftime(format_string)
 
 
-def get_time_boundaries(start_time: Union[int, float], observation_days: int, churn_days: int) -> dict:
+def get_time_boundaries(
+    start_time: Union[int, float], observation_days: int, churn_days: int
+) -> dict:
     """Calculates time boundaries for observation and churn periods.
 
     Given a start time and durations for observation and churn periods, this
@@ -90,20 +96,20 @@ def get_time_boundaries(start_time: Union[int, float], observation_days: int, ch
               'cp_start_iso' (str): Churn period start in ISO format.
               'cp_end_iso' (str): Churn period end in ISO format.
     """
-    start_dt = convert_timestamp(start_time, 'datetime')
+    start_dt = convert_timestamp(start_time, "datetime")
     op_end = start_dt + timedelta(days=observation_days)
     cp_start = op_end
     cp_end = cp_start + timedelta(days=churn_days)
 
     return {
-        'op_start': start_dt,
-        'op_end': op_end,
-        'cp_start': cp_start,
-        'cp_end': cp_end,
-        'op_start_iso': start_dt.isoformat(),
-        'op_end_iso': op_end.isoformat(),
-        'cp_start_iso': cp_start.isoformat(),
-        'cp_end_iso': cp_end.isoformat()
+        "op_start": start_dt,
+        "op_end": op_end,
+        "cp_start": cp_start,
+        "cp_end": cp_end,
+        "op_start_iso": start_dt.isoformat(),
+        "op_end_iso": op_end.isoformat(),
+        "cp_start_iso": cp_start.isoformat(),
+        "cp_end_iso": cp_end.isoformat(),
     }
 
 
@@ -125,7 +131,11 @@ def format_duration(seconds: float) -> str:
         return f"{seconds/3600:.1f} hours"
 
 
-def is_within_period(timestamp: Union[int, float], start_time: Union[int, float], end_time: Union[int, float]) -> bool:
+def is_within_period(
+    timestamp: Union[int, float],
+    start_time: Union[int, float],
+    end_time: Union[int, float],
+) -> bool:
     """Checks if a given timestamp falls within a specified time period.
 
     Args:
@@ -136,8 +146,8 @@ def is_within_period(timestamp: Union[int, float], start_time: Union[int, float]
     Returns:
         bool: True if the timestamp is within the period (inclusive), False otherwise.
     """
-    ts_dt = convert_timestamp(timestamp, 'datetime')
-    start_dt = convert_timestamp(start_time, 'datetime')
-    end_dt = convert_timestamp(end_time, 'datetime')
+    ts_dt = convert_timestamp(timestamp, "datetime")
+    start_dt = convert_timestamp(start_time, "datetime")
+    end_dt = convert_timestamp(end_time, "datetime")
 
     return start_dt <= ts_dt <= end_dt

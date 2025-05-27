@@ -8,7 +8,7 @@ def setup_logger(
     name: str,
     level: int = logging.INFO,
     log_file: Optional[str] = None,
-    format_string: Optional[str] = None
+    format_string: Optional[str] = None,
 ) -> logging.Logger:
     """Sets up a logger with consistent formatting and optional file output.
 
@@ -25,7 +25,7 @@ def setup_logger(
         logging.Logger: The configured logger instance.
     """
     if format_string is None:
-        format_string = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        format_string = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
     logger = logging.getLogger(name)
     logger.setLevel(level)
@@ -82,6 +82,6 @@ class LoggerMixin:
         Returns:
             logging.Logger: The logger instance for the class.
         """
-        if not hasattr(self, '_logger'):
+        if not hasattr(self, "_logger"):
             self._logger = get_logger(self.__class__.__name__)
         return self._logger

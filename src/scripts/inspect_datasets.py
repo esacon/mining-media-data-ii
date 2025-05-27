@@ -1,11 +1,12 @@
-import sys
-import json
 import argparse
+import json
+import sys
 from pathlib import Path
-from typing import Dict, Any
-from src.utils import load_jsonl_sample, load_json, format_timestamp
-from src.data_processing.dataset_creation import DatasetCreator
+from typing import Any, Dict
+
 from src.config import get_settings
+from src.data_processing.dataset_creation import DatasetCreator
+from src.utils import format_timestamp, load_json, load_jsonl_sample
 
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -24,18 +25,20 @@ def print_player_details(player_data: Dict[str, Any], detailed: bool = False) ->
     print(f"Events in OP: {player_data['op_event_count']}")
     print(f"Events in CP: {player_data['cp_event_count']}")
 
-    if detailed and player_data['observation_records']:
+    if detailed and player_data["observation_records"]:
         print("\nFirst 3 observation events:")
-        for i, event in enumerate(player_data['observation_records'][:3]):
-            event_type = event.get('event', 'play')
-            score = event.get('score', 'N/A')
-            time = event['time']
+        for i, event in enumerate(player_data["observation_records"][:3]):
+            event_type = event.get("event", "play")
+            score = event.get("score", "N/A")
+            time = event["time"]
 
             time_str = format_timestamp(time)
             print(f"  {i+1}. {time_str} - {event_type} (score: {score})")
 
 
-def analyze_dataset(dataset_path: Path, dataset_creator: DatasetCreator, detailed: bool = False) -> None:
+def analyze_dataset(
+    dataset_path: Path, dataset_creator: DatasetCreator, detailed: bool = False
+) -> None:
     """Analyzes and prints statistics about a specific labeled dataset.
 
     It loads overall statistics and displays sample player records for inspection.
@@ -52,9 +55,11 @@ def analyze_dataset(dataset_path: Path, dataset_creator: DatasetCreator, detaile
 
     print(f"Total Players: {summary.get('total_players', 0):,}")
     print(
-        f"Churned: {summary.get('churned_players', 0):,} ({summary.get('churn_rate', 0.0):.1%})")
+        f"Churned: {summary.get('churned_players', 0):,} ({summary.get('churn_rate', 0.0):.1%})"
+    )
     print(
-        f"Retained: {summary.get('retained_players', 0):,} ({summary.get('retention_rate', 0.0):.1%})")
+        f"Retained: {summary.get('retained_players', 0):,} ({summary.get('retention_rate', 0.0):.1%})"
+    )
     print(f"Avg events in OP: {summary.get('op_events', {}).get('mean', 0.0):.1f}")
     print(f"Avg events in CP: {summary.get('cp_events', {}).get('mean', 0.0):.1f}")
     print(f"Skipped records (during creation): {summary.get('skipped_count', 0):,}")
@@ -72,18 +77,18 @@ def main() -> None:
         "--data-dir",
         type=str,
         default=None,
-        help="Data directory where processed datasets are located (overrides config)"
+        help="Data directory where processed datasets are located (overrides config)",
     )
     parser.add_argument(
         "--detailed",
         action="store_true",
-        help="Show detailed player information (e.g., first few observation events)"
+        help="Show detailed player information (e.g., first few observation events)",
     )
     parser.add_argument(
         "--game",
         type=str,
         choices=["game1", "game2"],
-        help="Inspect datasets only for a specific game (e.g., 'game1' or 'game2')"
+        help="Inspect datasets only for a specific game (e.g., 'game1' or 'game2')",
     )
 
     args = parser.parse_args()
@@ -98,7 +103,9 @@ def main() -> None:
     labeled_files = list(data_dir.glob("*_labeled.jsonl"))
 
     if not labeled_files:
-        print("No labeled datasets found. Please ensure the data pipeline has been run.")
+        print(
+            "No labeled datasets found. Please ensure the data pipeline has been run."
+        )
         return
 
     if args.game:
@@ -114,12 +121,12 @@ def main() -> None:
     game2_files = sorted([f for f in labeled_files if "game2" in f.name])
 
     if game1_files:
-        print("\n" + "="*30 + " GAME 1 " + "="*30)
+        print("\n" + "=" * 30 + " GAME 1 " + "=" * 30)
         for file in game1_files:
             analyze_dataset(file, dataset_creator, detailed=args.detailed)
 
     if game2_files:
-        print("\n" + "="*30 + " GAME 2 " + "="*30)
+        print("\n" + "=" * 30 + " GAME 2 " + "=" * 30)
         for file in game2_files:
             analyze_dataset(file, dataset_creator, detailed=args.detailed)
 
@@ -128,15 +135,17 @@ def main() -> None:
         try:
             results = load_json(pipeline_results_path)
 
-            print("\n" + "="*70)
-            if 'total_execution_time' in results:
+            print("\n" + "=" * 70)
+            if "total_execution_time" in results:
                 print(
-                    f"Total Pipeline Execution Time: {results['total_execution_time']/60:.1f} minutes")
+                    f"Total Pipeline Execution Time: {results['total_execution_time']/60:.1f} minutes"
+                )
 
-            config = results.get('configuration', {})
+            config = results.get("configuration", {})
             print("Pipeline Configuration:")
             print(
-                f"  - Observation Period: {config.get('observation_days', 'N/A')} days")
+                f"  - Observation Period: {config.get('observation_days', 'N/A')} days"
+            )
             print(f"  - Churn Period: {config.get('churn_period_days', 'N/A')} days")
             print(f"  - Random Seed: {config.get('random_seed', 'N/A')}")
             print(f"  - Log Level: {config.get('log_level', 'N/A')}")
@@ -144,10 +153,13 @@ def main() -> None:
             print(f"  - Output Directory: {config.get('output_dir', 'N/A')}")
 
         except json.JSONDecodeError:
-            print(f"Warning: Could not read {settings.pipeline_results} due to invalid JSON.")
+            print(
+                f"Warning: Could not read {settings.pipeline_results} due to invalid JSON."
+            )
         except Exception as e:
             print(
-                f"Warning: An error occurred while reading {settings.pipeline_results}: {e}")
+                f"Warning: An error occurred while reading {settings.pipeline_results}: {e}"
+            )
 
 
 if __name__ == "__main__":

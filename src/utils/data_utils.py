@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
-from typing import List, Dict, Any, Union, Optional, Iterator
+from typing import Any, Dict, Iterator, List, Optional, Union
+
 import numpy as np
 
 
@@ -20,7 +21,7 @@ def load_jsonl_sample(file_path: Union[str, Path], n_samples: int = 5) -> List[D
     if not path.exists():
         return samples
 
-    with open(path, 'r', encoding='utf-8') as f:
+    with open(path, "r", encoding="utf-8") as f:
         for i, line in enumerate(f):
             if i >= n_samples:
                 break
@@ -43,7 +44,7 @@ def jsonl_iterator(file_path: Union[str, Path]) -> Iterator[Dict]:
     """
     path = Path(file_path)
 
-    with open(path, 'r', encoding='utf-8') as f:
+    with open(path, "r", encoding="utf-8") as f:
         for line_num, line in enumerate(f):
             try:
                 yield json.loads(line.strip())
@@ -63,7 +64,7 @@ def save_json(data: Any, file_path: Union[str, Path], indent: int = 2) -> None:
     path = Path(file_path)
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(path, 'w', encoding='utf-8') as f:
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=indent, ensure_ascii=False)
 
 
@@ -84,7 +85,7 @@ def load_json(file_path: Union[str, Path]) -> Any:
     if not path.exists():
         raise FileNotFoundError(f"File not found: {path}")
 
-    with open(path, 'r', encoding='utf-8') as f:
+    with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -98,9 +99,9 @@ def save_jsonl(data: List[Dict], file_path: Union[str, Path]) -> None:
     path = Path(file_path)
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(path, 'w', encoding='utf-8') as f:
+    with open(path, "w", encoding="utf-8") as f:
         for item in data:
-            f.write(json.dumps(item, ensure_ascii=False) + '\n')
+            f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
 
 def _get_player_id_from_record(record: Dict, id_field: Optional[str]) -> Optional[str]:
@@ -117,11 +118,17 @@ def _get_player_id_from_record(record: Dict, id_field: Optional[str]) -> Optiona
     if id_field:
         return str(record.get(id_field)) if record.get(id_field) is not None else None
     else:
-        return str(record.get("device_id") or record.get("uid") or record.get("player_id")) if \
-            (record.get("device_id") or record.get("uid") or record.get("player_id")) is not None else None
+        return (
+            str(record.get("device_id") or record.get("uid") or record.get("player_id"))
+            if (record.get("device_id") or record.get("uid") or record.get("player_id"))
+            is not None
+            else None
+        )
 
 
-def get_player_ids(file_path: Union[str, Path], id_field: Optional[str] = None) -> List[str]:
+def get_player_ids(
+    file_path: Union[str, Path], id_field: Optional[str] = None
+) -> List[str]:
     """Extracts player IDs from a JSONL file.
 
     Args:
@@ -149,7 +156,7 @@ def split_jsonl_by_ids(
     eval_ids: set,
     train_output: Union[str, Path],
     eval_output: Union[str, Path],
-    id_field: Optional[str] = None
+    id_field: Optional[str] = None,
 ) -> Dict[str, int]:
     """Splits a JSONL file into training and evaluation datasets based on player IDs.
 
@@ -176,8 +183,10 @@ def split_jsonl_by_ids(
     train_path.parent.mkdir(parents=True, exist_ok=True)
     eval_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(train_path, 'w', encoding='utf-8') as f_train, \
-            open(eval_path, 'w', encoding='utf-8') as f_eval:
+    with (
+        open(train_path, "w", encoding="utf-8") as f_train,
+        open(eval_path, "w", encoding="utf-8") as f_eval,
+    ):
         for record in jsonl_iterator(input_file):
             player_id = _get_player_id_from_record(record, id_field)
 
@@ -186,18 +195,18 @@ def split_jsonl_by_ids(
                 continue
 
             if player_id in train_ids:
-                f_train.write(json.dumps(record, ensure_ascii=False) + '\n')
+                f_train.write(json.dumps(record, ensure_ascii=False) + "\n")
                 train_count += 1
             elif player_id in eval_ids:
-                f_eval.write(json.dumps(record, ensure_ascii=False) + '\n')
+                f_eval.write(json.dumps(record, ensure_ascii=False) + "\n")
                 eval_count += 1
             else:
                 skipped_count += 1
 
     return {
-        'train_count': train_count,
-        'eval_count': eval_count,
-        'skipped_count': skipped_count
+        "train_count": train_count,
+        "eval_count": eval_count,
+        "skipped_count": skipped_count,
     }
 
 
@@ -233,13 +242,13 @@ def calculate_dataset_stats(file_path: Union[str, Path]) -> Dict[str, Any]:
 
     if total_count == 0:
         return {
-            'total_players': 0,
-            'churned_players': 0,
-            'retained_players': 0,
-            'churn_rate': 0.0,
-            'retention_rate': 0.0,
-            'op_events': {'mean': 0, 'min': 0, 'max': 0, 'std': 0},
-            'cp_events': {'mean': 0, 'min': 0, 'max': 0, 'std': 0}
+            "total_players": 0,
+            "churned_players": 0,
+            "retained_players": 0,
+            "churn_rate": 0.0,
+            "retention_rate": 0.0,
+            "op_events": {"mean": 0, "min": 0, "max": 0, "std": 0},
+            "cp_events": {"mean": 0, "min": 0, "max": 0, "std": 0},
         }
 
     retained_count = total_count - churned_count
@@ -247,21 +256,21 @@ def calculate_dataset_stats(file_path: Union[str, Path]) -> Dict[str, Any]:
     retention_rate = retained_count / total_count
 
     return {
-        'total_players': total_count,
-        'churned_players': churned_count,
-        'retained_players': retained_count,
-        'churn_rate': churn_rate,
-        'retention_rate': retention_rate,
-        'op_events': {
-            'mean': np.mean(op_event_counts) if op_event_counts else 0,
-            'min': min(op_event_counts) if op_event_counts else 0,
-            'max': max(op_event_counts) if op_event_counts else 0,
-            'std': np.std(op_event_counts) if op_event_counts else 0
+        "total_players": total_count,
+        "churned_players": churned_count,
+        "retained_players": retained_count,
+        "churn_rate": churn_rate,
+        "retention_rate": retention_rate,
+        "op_events": {
+            "mean": np.mean(op_event_counts) if op_event_counts else 0,
+            "min": min(op_event_counts) if op_event_counts else 0,
+            "max": max(op_event_counts) if op_event_counts else 0,
+            "std": np.std(op_event_counts) if op_event_counts else 0,
         },
-        'cp_events': {
-            'mean': np.mean(cp_event_counts) if cp_event_counts else 0,
-            'min': min(cp_event_counts) if cp_event_counts else 0,
-            'max': max(cp_event_counts) if cp_event_counts else 0,
-            'std': np.std(cp_event_counts) if cp_event_counts else 0
-        }
+        "cp_events": {
+            "mean": np.mean(cp_event_counts) if cp_event_counts else 0,
+            "min": min(cp_event_counts) if cp_event_counts else 0,
+            "max": max(cp_event_counts) if cp_event_counts else 0,
+            "std": np.std(cp_event_counts) if cp_event_counts else 0,
+        },
     }

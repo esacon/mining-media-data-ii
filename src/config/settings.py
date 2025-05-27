@@ -1,7 +1,8 @@
-import yaml
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Union
-from dataclasses import dataclass
+
+import yaml
 
 
 @dataclass
@@ -44,25 +45,25 @@ class Settings:
     # Input files
     game1_csv: str = "dataset_1_game1/rawdata_game1.csv"
     game2_jsonl: str = "dataset_2_game2/playerLogs_game2_playerbasedlines.jsonl"
-    
+
     # Intermediate files
     game1_converted: str = "game1_player_events.jsonl"
     game1_train: str = "game1_player_events_train.jsonl"
     game1_eval: str = "game1_player_events_eval.jsonl"
     game2_train: str = "playerLogs_game2_playerbasedlines_train.jsonl"
     game2_eval: str = "playerLogs_game2_playerbasedlines_eval.jsonl"
-    
+
     # Final labeled datasets
     game1_ds1: str = "game1_DS1_labeled.jsonl"
     game1_ds2: str = "game1_DS2_labeled.jsonl"
     game2_ds1: str = "game2_DS1_labeled.jsonl"
     game2_ds2: str = "game2_DS2_labeled.jsonl"
-    
+
     # Result files
     preparation_results: str = "preparation_results.json"
     dataset_creation_results: str = "dataset_creation_results.json"
     pipeline_results: str = "pipeline_results.json"
-    
+
     # File suffixes
     train_suffix: str = "_train.jsonl"
     eval_suffix: str = "_eval.jsonl"
@@ -98,7 +99,7 @@ class Settings:
         self.results_dir.mkdir(parents=True, exist_ok=True)
 
     @classmethod
-    def from_yaml(cls, config_path: Optional[Union[str, Path]] = None) -> 'Settings':
+    def from_yaml(cls, config_path: Optional[Union[str, Path]] = None) -> "Settings":
         """Creates a Settings instance by loading configuration from a YAML file.
 
         If no configuration path is provided, it defaults to 'config.yaml' in the
@@ -118,71 +119,95 @@ class Settings:
         settings = cls()
 
         if config_path.exists():
-            with open(config_path, 'r') as f:
+            with open(config_path, "r") as f:
                 config = yaml.safe_load(f)
 
-            if 'data_processing' in config:
-                dp = config['data_processing']
+            if "data_processing" in config:
+                dp = config["data_processing"]
                 settings.observation_days = dp.get(
-                    'observation_days', settings.observation_days)
+                    "observation_days", settings.observation_days
+                )
                 settings.churn_period_days = dp.get(
-                    'churn_period_days', settings.churn_period_days)
-                settings.train_ratio = dp.get('train_ratio', settings.train_ratio)
-                settings.random_seed = dp.get('random_seed', settings.random_seed)
+                    "churn_period_days", settings.churn_period_days
+                )
+                settings.train_ratio = dp.get("train_ratio", settings.train_ratio)
+                settings.random_seed = dp.get("random_seed", settings.random_seed)
 
-            if 'paths' in config:
-                paths = config['paths']
-                if 'data_dir' in paths:
-                    settings.data_dir = settings.project_root / paths['data_dir']
-                if 'processed_dir' in paths:
-                    settings.processed_dir = settings.project_root / \
-                        paths['processed_dir']
-                if 'logs_dir' in paths:
-                    settings.logs_dir = settings.project_root / paths['logs_dir']
-                if 'results_dir' in paths:
-                    settings.results_dir = settings.project_root / paths['results_dir']
+            if "paths" in config:
+                paths = config["paths"]
+                if "data_dir" in paths:
+                    settings.data_dir = settings.project_root / paths["data_dir"]
+                if "processed_dir" in paths:
+                    settings.processed_dir = (
+                        settings.project_root / paths["processed_dir"]
+                    )
+                if "logs_dir" in paths:
+                    settings.logs_dir = settings.project_root / paths["logs_dir"]
+                if "results_dir" in paths:
+                    settings.results_dir = settings.project_root / paths["results_dir"]
 
-            if 'filenames' in config:
-                filenames = config['filenames']
+            if "filenames" in config:
+                filenames = config["filenames"]
                 # Input files
-                settings.game1_csv = filenames.get('game1_csv', settings.game1_csv)
-                settings.game2_jsonl = filenames.get('game2_jsonl', settings.game2_jsonl)
-                
+                settings.game1_csv = filenames.get("game1_csv", settings.game1_csv)
+                settings.game2_jsonl = filenames.get(
+                    "game2_jsonl", settings.game2_jsonl
+                )
+
                 # Intermediate files
-                settings.game1_converted = filenames.get('game1_converted', settings.game1_converted)
-                settings.game1_train = filenames.get('game1_train', settings.game1_train)
-                settings.game1_eval = filenames.get('game1_eval', settings.game1_eval)
-                settings.game2_train = filenames.get('game2_train', settings.game2_train)
-                settings.game2_eval = filenames.get('game2_eval', settings.game2_eval)
-                
+                settings.game1_converted = filenames.get(
+                    "game1_converted", settings.game1_converted
+                )
+                settings.game1_train = filenames.get(
+                    "game1_train", settings.game1_train
+                )
+                settings.game1_eval = filenames.get("game1_eval", settings.game1_eval)
+                settings.game2_train = filenames.get(
+                    "game2_train", settings.game2_train
+                )
+                settings.game2_eval = filenames.get("game2_eval", settings.game2_eval)
+
                 # Final labeled datasets
-                settings.game1_ds1 = filenames.get('game1_ds1', settings.game1_ds1)
-                settings.game1_ds2 = filenames.get('game1_ds2', settings.game1_ds2)
-                settings.game2_ds1 = filenames.get('game2_ds1', settings.game2_ds1)
-                settings.game2_ds2 = filenames.get('game2_ds2', settings.game2_ds2)
-                
+                settings.game1_ds1 = filenames.get("game1_ds1", settings.game1_ds1)
+                settings.game1_ds2 = filenames.get("game1_ds2", settings.game1_ds2)
+                settings.game2_ds1 = filenames.get("game2_ds1", settings.game2_ds1)
+                settings.game2_ds2 = filenames.get("game2_ds2", settings.game2_ds2)
+
                 # Result files
-                settings.preparation_results = filenames.get('preparation_results', settings.preparation_results)
-                settings.dataset_creation_results = filenames.get('dataset_creation_results', settings.dataset_creation_results)
-                settings.pipeline_results = filenames.get('pipeline_results', settings.pipeline_results)
-                
+                settings.preparation_results = filenames.get(
+                    "preparation_results", settings.preparation_results
+                )
+                settings.dataset_creation_results = filenames.get(
+                    "dataset_creation_results", settings.dataset_creation_results
+                )
+                settings.pipeline_results = filenames.get(
+                    "pipeline_results", settings.pipeline_results
+                )
+
                 # File suffixes
-                settings.train_suffix = filenames.get('train_suffix', settings.train_suffix)
-                settings.eval_suffix = filenames.get('eval_suffix', settings.eval_suffix)
-                settings.labeled_suffix = filenames.get('labeled_suffix', settings.labeled_suffix)
+                settings.train_suffix = filenames.get(
+                    "train_suffix", settings.train_suffix
+                )
+                settings.eval_suffix = filenames.get(
+                    "eval_suffix", settings.eval_suffix
+                )
+                settings.labeled_suffix = filenames.get(
+                    "labeled_suffix", settings.labeled_suffix
+                )
 
-            if 'logging' in config:
-                log = config['logging']
-                settings.log_level = log.get('level', settings.log_level)
-                settings.log_to_console = log.get('console', settings.log_to_console)
-                settings.log_to_file = log.get('file', settings.log_to_file)
+            if "logging" in config:
+                log = config["logging"]
+                settings.log_level = log.get("level", settings.log_level)
+                settings.log_to_console = log.get("console", settings.log_to_console)
+                settings.log_to_file = log.get("file", settings.log_to_file)
 
-            if 'performance' in config:
-                perf = config['performance']
-                settings.batch_size = perf.get('batch_size', settings.batch_size)
+            if "performance" in config:
+                perf = config["performance"]
+                settings.batch_size = perf.get("batch_size", settings.batch_size)
                 settings.progress_interval = perf.get(
-                    'progress_interval', settings.progress_interval)
-                settings.max_workers = perf.get('max_workers', settings.max_workers)
+                    "progress_interval", settings.progress_interval
+                )
+                settings.max_workers = perf.get("max_workers", settings.max_workers)
 
         settings.__post_init__()
         return settings

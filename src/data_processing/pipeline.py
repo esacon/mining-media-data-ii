@@ -1,10 +1,10 @@
 import time
-from typing import Dict, Any
+from typing import Any, Dict
 
+from src.config import Settings
 from src.data_processing.data_preparation import DataPreparation
 from src.data_processing.dataset_creation import DatasetCreator
-from src.utils import LoggerMixin, setup_logger, save_json, format_duration
-from src.config import Settings
+from src.utils import LoggerMixin, format_duration, save_json, setup_logger
 
 
 class DataPipeline(LoggerMixin):
@@ -12,10 +12,7 @@ class DataPipeline(LoggerMixin):
     (conversion and splitting) and labeled dataset creation.
     """
 
-    def __init__(
-        self,
-        settings: Settings
-    ):
+    def __init__(self, settings: Settings):
         """Initializes the DataPipeline with configurations.
 
         Args:
@@ -30,14 +27,15 @@ class DataPipeline(LoggerMixin):
 
         log_file_path = None
         if self.settings.log_to_file:
-            log_file_path = self.settings.logs_dir / \
-                f"{self.__class__.__name__.lower()}.log"
+            log_file_path = (
+                self.settings.logs_dir / f"{self.__class__.__name__.lower()}.log"
+            )
 
         self._logger = setup_logger(
             name=self.__class__.__name__,
             level=self.settings.log_level,
             log_file=str(log_file_path) if log_file_path else None,
-            format_string=self.settings.log_format
+            format_string=self.settings.log_format,
         )
 
         # Initialize data preparation and dataset creation components
@@ -66,10 +64,7 @@ class DataPipeline(LoggerMixin):
         for game, files in prep_results.items():
             self.logger.info(f"  {game}: train={files['train']}, eval={files['eval']}")
 
-        return {
-            "results": prep_results,
-            "execution_time": prep_time
-        }
+        return {"results": prep_results, "execution_time": prep_time}
 
     def run_dataset_creation(self) -> Dict[str, Any]:
         """Runs the labeled dataset creation step of the pipeline.
@@ -90,12 +85,10 @@ class DataPipeline(LoggerMixin):
         creation_time = time.time() - start_time
 
         self.logger.info(
-            f"Dataset creation completed in {format_duration(creation_time)}")
+            f"Dataset creation completed in {format_duration(creation_time)}"
+        )
 
-        return {
-            "results": dataset_results,
-            "execution_time": creation_time
-        }
+        return {"results": dataset_results, "execution_time": creation_time}
 
     def print_summary(self, dataset_results: Dict[str, Dict[str, str]]) -> None:
         """Prints a summary of the created datasets.
@@ -118,19 +111,26 @@ class DataPipeline(LoggerMixin):
                 summary = self.dataset_creator.get_dataset_summary(filename)
 
                 self.logger.info(
-                    f"    - Total players: {summary.get('total_players', 0):,}")
+                    f"    - Total players: {summary.get('total_players', 0):,}"
+                )
                 self.logger.info(
-                    f"    - Churned: {summary.get('churned_players', 0):,} ({summary.get('churn_rate', 0.0):.1%})")
+                    f"    - Churned: {summary.get('churned_players', 0):,} ({summary.get('churn_rate', 0.0):.1%})"
+                )
                 self.logger.info(
-                    f"    - Retained: {summary.get('retained_players', 0):,} ({summary.get('retention_rate', 0.0):.1%})")
+                    f"    - Retained: {summary.get('retained_players', 0):,} ({summary.get('retention_rate', 0.0):.1%})"
+                )
                 self.logger.info(
-                    f"    - Avg events in OP: {summary.get('op_events', {}).get('mean', 0.0):.1f}")
+                    f"    - Avg events in OP: {summary.get('op_events', {}).get('mean', 0.0):.1f}"
+                )
                 self.logger.info(
-                    f"    - Event range (OP): {summary.get('op_events', {}).get('min', 0)} - {summary.get('op_events', {}).get('max', 0)}")
+                    f"    - Event range (OP): {summary.get('op_events', {}).get('min', 0)} - {summary.get('op_events', {}).get('max', 0)}"
+                )
                 self.logger.info(
-                    f"    - Avg events in CP: {summary.get('cp_events', {}).get('mean', 0.0):.1f}")
+                    f"    - Avg events in CP: {summary.get('cp_events', {}).get('mean', 0.0):.1f}"
+                )
                 self.logger.info(
-                    f"    - Event range (CP): {summary.get('cp_events', {}).get('min', 0)} - {summary.get('cp_events', {}).get('max', 0)}")
+                    f"    - Event range (CP): {summary.get('cp_events', {}).get('min', 0)} - {summary.get('cp_events', {}).get('max', 0)}"
+                )
 
     def run_full_pipeline(self) -> Dict[str, Any]:
         """Runs the complete data processing pipeline from raw data to labeled datasets.
@@ -161,7 +161,8 @@ class DataPipeline(LoggerMixin):
 
             total_time = time.time() - pipeline_start
             self.logger.info(
-                f"\nTotal pipeline execution time: {format_duration(total_time)}")
+                f"\nTotal pipeline execution time: {format_duration(total_time)}"
+            )
 
             pipeline_results = {
                 "preparation": prep_step,
@@ -173,14 +174,17 @@ class DataPipeline(LoggerMixin):
                     "data_dir": str(self.data_dir),
                     "output_dir": str(self.output_dir),
                     "log_level": self.settings.log_level,
-                    "random_seed": self.settings.random_seed
-                }
+                    "random_seed": self.settings.random_seed,
+                },
             }
 
-            save_json(pipeline_results, self.output_dir / self.settings.pipeline_results)
+            save_json(
+                pipeline_results, self.output_dir / self.settings.pipeline_results
+            )
 
             self.logger.info(
-                f"\nPipeline results saved to: {self.output_dir}/{self.settings.pipeline_results}")
+                f"\nPipeline results saved to: {self.output_dir}/{self.settings.pipeline_results}"
+            )
             self.logger.info("\nNext steps:")
             self.logger.info("  1. Run feature engineering on the labeled datasets")
             self.logger.info("  2. Train and evaluate churn prediction models")

@@ -1,11 +1,18 @@
-import polars as pl
 import json
 import random
 from pathlib import Path
 from typing import Dict, Tuple, Union
 
-from src.utils import LoggerMixin, ensure_dir, get_player_ids, split_jsonl_by_ids, save_json
+import polars as pl
+
 from src.config import Settings
+from src.utils import (
+    LoggerMixin,
+    ensure_dir,
+    get_player_ids,
+    save_json,
+    split_jsonl_by_ids,
+)
 
 
 class DataPreparation(LoggerMixin):
@@ -24,9 +31,7 @@ class DataPreparation(LoggerMixin):
         self.output_dir = ensure_dir(settings.processed_dir)
 
     def convert_game1_to_jsonl(
-        self,
-        input_file: Union[str, Path] = None,
-        output_file: Union[str, Path] = None
+        self, input_file: Union[str, Path] = None, output_file: Union[str, Path] = None
     ) -> Path:
         """Converts Game 1 CSV data to JSONL format, with one JSON object per player.
 
@@ -58,40 +63,32 @@ class DataPreparation(LoggerMixin):
 
         df = pl.read_csv(input_path)
 
-        player_data = df.group_by("device").agg([
-            pl.col("time").alias("times"),
-            pl.col("score").alias("scores")
-        ])
+        player_data = df.group_by("device").agg(
+            [pl.col("time").alias("times"), pl.col("score").alias("scores")]
+        )
 
         output_path = self.output_dir / output_file
-        with open(output_path, 'w', encoding='utf-8') as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             for row in player_data.iter_rows(named=True):
                 events = []
                 for time, score in zip(row["times"], row["scores"]):
-                    events.append({
-                        "time": int(time),
-                        "score": int(score),
-                        "event": "play"
-                    })
+                    events.append(
+                        {"time": int(time), "score": int(score), "event": "play"}
+                    )
 
                 events.sort(key=lambda x: x["time"])
 
-                player_json = {
-                    "device_id": str(row["device"]),
-                    "records": events
-                }
+                player_json = {"device_id": str(row["device"]), "records": events}
 
-                f.write(json.dumps(player_json, ensure_ascii=False) + '\n')
+                f.write(json.dumps(player_json, ensure_ascii=False) + "\n")
 
         self.logger.info(
-            f"Converted {len(player_data)} players to JSONL format at {output_path}")
+            f"Converted {len(player_data)} players to JSONL format at {output_path}"
+        )
         return output_path
 
     def split_dataset(
-        self,
-        jsonl_file: Union[str, Path],
-        train_ratio: float = None,
-        seed: int = None
+        self, jsonl_file: Union[str, Path], train_ratio: float = None, seed: int = None
     ) -> Tuple[Path, Path]:
         """Splits a JSONL dataset into training and evaluation sets based on player IDs.
 
@@ -127,7 +124,8 @@ class DataPreparation(LoggerMixin):
 
         if not input_path.exists():
             raise FileNotFoundError(
-                f"Input JSONL file not found for splitting: {input_path}")
+                f"Input JSONL file not found for splitting: {input_path}"
+            )
 
         player_ids = get_player_ids(input_path)
 
@@ -151,7 +149,7 @@ class DataPreparation(LoggerMixin):
             eval_ids=eval_ids,
             train_output=train_path,
             eval_output=eval_path,
-            id_field=None
+            id_field=None,
         )
 
         self.logger.info(
@@ -183,14 +181,8 @@ class DataPreparation(LoggerMixin):
         )
 
         results = {
-            "game1": {
-                "train": game1_train_path.name,
-                "eval": game1_eval_path.name
-            },
-            "game2": {
-                "train": game2_train_path.name,
-                "eval": game2_eval_path.name
-            }
+            "game1": {"train": game1_train_path.name, "eval": game1_eval_path.name},
+            "game2": {"train": game2_train_path.name, "eval": game2_eval_path.name},
         }
 
         save_json(results, self.output_dir / self.settings.preparation_results)
