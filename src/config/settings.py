@@ -43,8 +43,8 @@ class Settings:
     random_seed: int = 42
 
     # Input files
-    game1_csv: str = "dataset_1_game1/rawdata_game1.csv"
-    game2_jsonl: str = "dataset_2_game2/playerLogs_game2_playerbasedlines.jsonl"
+    game1_csv: str = "dataset_game1/rawdata_game1.csv"
+    game2_jsonl: str = "dataset_game2/playerLogs_game2_playerbasedlines.jsonl"
 
     # Intermediate files
     game1_converted: str = "game1_player_events.jsonl"

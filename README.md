@@ -240,8 +240,8 @@ paths:
 # File Names Configuration
 filenames:
   # Input files
-  game1_csv: "dataset_1_game1/rawdata_game1.csv"
-  game2_jsonl: "dataset_2_game2/playerLogs_game2_playerbasedlines.jsonl"
+  game1_csv: "dataset_game1/rawdata_game1.csv"
+  game2_jsonl: "dataset_game2/playerLogs_game2_playerbasedlines.jsonl"
   
   # Intermediate files (after conversion and splitting)
   game1_converted: "game1_player_events.jsonl"

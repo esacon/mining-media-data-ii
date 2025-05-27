@@ -27,8 +27,8 @@ project-1/
 │   │   ├── run_pipeline.py           # Main pipeline runner
 │   │   └── inspect_datasets.py       # Dataset inspection tool
 │   ├── data/                         # Data directory
-│   │   ├── dataset_1_game1/          # Game 1 raw data
-│   │   ├── dataset_2_game2/          # Game 2 raw data
+│   │   ├── dataset_game1/          # Game 1 raw data
+│   │   ├── dataset_game2/          # Game 2 raw data
 │   │   ├── processed/                # Processed datasets
 │   │   │   ├── README.md             # Processed data documentation
 │   │   │   ├── *.jsonl               # Player event files
@@ -172,8 +172,8 @@ paths:                    # Directory paths
 
 filenames:                # File naming configuration
   # Input files
-  game1_csv: "dataset_1_game1/rawdata_game1.csv"
-  game2_jsonl: "dataset_2_game2/playerLogs_game2_playerbasedlines.jsonl"
+  game1_csv: "dataset_game1/rawdata_game1.csv"
+  game2_jsonl: "dataset_game2/playerLogs_game2_playerbasedlines.jsonl"
   
   # Intermediate files
   game1_converted: "game1_player_events.jsonl"

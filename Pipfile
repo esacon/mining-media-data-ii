@@ -12,6 +12,7 @@ pre-commit = "*"
 pytest = "*"
 isort = {extras = ["colors"], version = "*"}
 polars = "*"
+ijson = "*"
 
 [dev-packages]
 
