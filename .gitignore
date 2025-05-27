@@ -1,4 +1,4 @@
 .DS_Store
 .venv
 __pycache__/
-src/data/dataset_2/playerLogs_game2_playerbasedlines.jsonl
+src/data/dataset_2_game2/playerLogs_game2_playerbasedlines.jsonl
