@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Optional, Union
+from typing import Union
 
 
 def detect_time_format(timestamp: Union[int, float]) -> str:

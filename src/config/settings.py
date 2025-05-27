@@ -98,6 +98,85 @@ class Settings:
         self.logs_dir.mkdir(parents=True, exist_ok=True)
         self.results_dir.mkdir(parents=True, exist_ok=True)
 
+    def _load_data_processing_config(self, config: dict) -> None:
+        """Load data processing configuration from config dict."""
+        if "data_processing" in config:
+            dp = config["data_processing"]
+            self.observation_days = dp.get("observation_days", self.observation_days)
+            self.churn_period_days = dp.get("churn_period_days", self.churn_period_days)
+            self.train_ratio = dp.get("train_ratio", self.train_ratio)
+            self.random_seed = dp.get("random_seed", self.random_seed)
+
+    def _load_paths_config(self, config: dict) -> None:
+        """Load paths configuration from config dict."""
+        if "paths" in config:
+            paths = config["paths"]
+            if "data_dir" in paths:
+                self.data_dir = self.project_root / paths["data_dir"]
+            if "processed_dir" in paths:
+                self.processed_dir = self.project_root / paths["processed_dir"]
+            if "logs_dir" in paths:
+                self.logs_dir = self.project_root / paths["logs_dir"]
+            if "results_dir" in paths:
+                self.results_dir = self.project_root / paths["results_dir"]
+
+    def _load_filenames_config(self, config: dict) -> None:
+        """Load filenames configuration from config dict."""
+        if "filenames" in config:
+            filenames = config["filenames"]
+            # Input files
+            self.game1_csv = filenames.get("game1_csv", self.game1_csv)
+            self.game2_jsonl = filenames.get("game2_jsonl", self.game2_jsonl)
+
+            # Intermediate files
+            self.game1_converted = filenames.get(
+                "game1_converted", self.game1_converted
+            )
+            self.game1_train = filenames.get("game1_train", self.game1_train)
+            self.game1_eval = filenames.get("game1_eval", self.game1_eval)
+            self.game2_train = filenames.get("game2_train", self.game2_train)
+            self.game2_eval = filenames.get("game2_eval", self.game2_eval)
+
+            # Final labeled datasets
+            self.game1_ds1 = filenames.get("game1_ds1", self.game1_ds1)
+            self.game1_ds2 = filenames.get("game1_ds2", self.game1_ds2)
+            self.game2_ds1 = filenames.get("game2_ds1", self.game2_ds1)
+            self.game2_ds2 = filenames.get("game2_ds2", self.game2_ds2)
+
+            # Result files
+            self.preparation_results = filenames.get(
+                "preparation_results", self.preparation_results
+            )
+            self.dataset_creation_results = filenames.get(
+                "dataset_creation_results", self.dataset_creation_results
+            )
+            self.pipeline_results = filenames.get(
+                "pipeline_results", self.pipeline_results
+            )
+
+            # File suffixes
+            self.train_suffix = filenames.get("train_suffix", self.train_suffix)
+            self.eval_suffix = filenames.get("eval_suffix", self.eval_suffix)
+            self.labeled_suffix = filenames.get("labeled_suffix", self.labeled_suffix)
+
+    def _load_logging_config(self, config: dict) -> None:
+        """Load logging configuration from config dict."""
+        if "logging" in config:
+            log = config["logging"]
+            self.log_level = log.get("level", self.log_level)
+            self.log_to_console = log.get("console", self.log_to_console)
+            self.log_to_file = log.get("file", self.log_to_file)
+
+    def _load_performance_config(self, config: dict) -> None:
+        """Load performance configuration from config dict."""
+        if "performance" in config:
+            perf = config["performance"]
+            self.batch_size = perf.get("batch_size", self.batch_size)
+            self.progress_interval = perf.get(
+                "progress_interval", self.progress_interval
+            )
+            self.max_workers = perf.get("max_workers", self.max_workers)
+
     @classmethod
     def from_yaml(cls, config_path: Optional[Union[str, Path]] = None) -> "Settings":
         """Creates a Settings instance by loading configuration from a YAML file.
@@ -122,92 +201,11 @@ class Settings:
             with open(config_path, "r") as f:
                 config = yaml.safe_load(f)
 
-            if "data_processing" in config:
-                dp = config["data_processing"]
-                settings.observation_days = dp.get(
-                    "observation_days", settings.observation_days
-                )
-                settings.churn_period_days = dp.get(
-                    "churn_period_days", settings.churn_period_days
-                )
-                settings.train_ratio = dp.get("train_ratio", settings.train_ratio)
-                settings.random_seed = dp.get("random_seed", settings.random_seed)
-
-            if "paths" in config:
-                paths = config["paths"]
-                if "data_dir" in paths:
-                    settings.data_dir = settings.project_root / paths["data_dir"]
-                if "processed_dir" in paths:
-                    settings.processed_dir = (
-                        settings.project_root / paths["processed_dir"]
-                    )
-                if "logs_dir" in paths:
-                    settings.logs_dir = settings.project_root / paths["logs_dir"]
-                if "results_dir" in paths:
-                    settings.results_dir = settings.project_root / paths["results_dir"]
-
-            if "filenames" in config:
-                filenames = config["filenames"]
-                # Input files
-                settings.game1_csv = filenames.get("game1_csv", settings.game1_csv)
-                settings.game2_jsonl = filenames.get(
-                    "game2_jsonl", settings.game2_jsonl
-                )
-
-                # Intermediate files
-                settings.game1_converted = filenames.get(
-                    "game1_converted", settings.game1_converted
-                )
-                settings.game1_train = filenames.get(
-                    "game1_train", settings.game1_train
-                )
-                settings.game1_eval = filenames.get("game1_eval", settings.game1_eval)
-                settings.game2_train = filenames.get(
-                    "game2_train", settings.game2_train
-                )
-                settings.game2_eval = filenames.get("game2_eval", settings.game2_eval)
-
-                # Final labeled datasets
-                settings.game1_ds1 = filenames.get("game1_ds1", settings.game1_ds1)
-                settings.game1_ds2 = filenames.get("game1_ds2", settings.game1_ds2)
-                settings.game2_ds1 = filenames.get("game2_ds1", settings.game2_ds1)
-                settings.game2_ds2 = filenames.get("game2_ds2", settings.game2_ds2)
-
-                # Result files
-                settings.preparation_results = filenames.get(
-                    "preparation_results", settings.preparation_results
-                )
-                settings.dataset_creation_results = filenames.get(
-                    "dataset_creation_results", settings.dataset_creation_results
-                )
-                settings.pipeline_results = filenames.get(
-                    "pipeline_results", settings.pipeline_results
-                )
-
-                # File suffixes
-                settings.train_suffix = filenames.get(
-                    "train_suffix", settings.train_suffix
-                )
-                settings.eval_suffix = filenames.get(
-                    "eval_suffix", settings.eval_suffix
-                )
-                settings.labeled_suffix = filenames.get(
-                    "labeled_suffix", settings.labeled_suffix
-                )
-
-            if "logging" in config:
-                log = config["logging"]
-                settings.log_level = log.get("level", settings.log_level)
-                settings.log_to_console = log.get("console", settings.log_to_console)
-                settings.log_to_file = log.get("file", settings.log_to_file)
-
-            if "performance" in config:
-                perf = config["performance"]
-                settings.batch_size = perf.get("batch_size", settings.batch_size)
-                settings.progress_interval = perf.get(
-                    "progress_interval", settings.progress_interval
-                )
-                settings.max_workers = perf.get("max_workers", settings.max_workers)
+            settings._load_data_processing_config(config)
+            settings._load_paths_config(config)
+            settings._load_filenames_config(config)
+            settings._load_logging_config(config)
+            settings._load_performance_config(config)
 
         settings.__post_init__()
         return settings

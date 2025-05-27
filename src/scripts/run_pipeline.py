@@ -73,12 +73,8 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main() -> None:
-    """Main function to load settings, initialize, and run the data pipeline."""
-    args = parse_args()
-
-    settings = get_settings(args.config)
-
+def _apply_argument_overrides(settings, args: argparse.Namespace) -> None:
+    """Apply command-line argument overrides to settings."""
     if args.data_dir:
         settings.data_dir = Path(args.data_dir)
     if args.output_dir:
@@ -90,22 +86,33 @@ def main() -> None:
     if args.log_level:
         settings.log_level = args.log_level
 
+
+def _run_pipeline_step(pipeline, args: argparse.Namespace) -> None:
+    """Run the appropriate pipeline step based on command-line arguments."""
+    if args.prep_only:
+        pipeline.logger.info("Running only data preparation step...")
+        pipeline.run_preparation()
+    elif args.create_only:
+        pipeline.logger.info("Running only dataset creation step...")
+        pipeline.run_dataset_creation()
+        pipeline.print_summary(pipeline.dataset_creator.create_all_datasets())
+    else:
+        pipeline.logger.info("Running full data pipeline...")
+        pipeline.run_full_pipeline()
+
+
+def main() -> None:
+    """Main function to load settings, initialize, and run the data pipeline."""
+    args = parse_args()
+    settings = get_settings(args.config)
+
+    _apply_argument_overrides(settings, args)
     settings.__post_init__()
 
     pipeline = DataPipeline(settings=settings)
 
     try:
-        if args.prep_only:
-            pipeline.logger.info("Running only data preparation step...")
-            pipeline.run_preparation()
-        elif args.create_only:
-            pipeline.logger.info("Running only dataset creation step...")
-            pipeline.run_dataset_creation()
-            pipeline.print_summary(pipeline.dataset_creator.create_all_datasets())
-        else:
-            pipeline.logger.info("Running full data pipeline...")
-            pipeline.run_full_pipeline()
-
+        _run_pipeline_step(pipeline, args)
     except KeyboardInterrupt:
         pipeline.logger.info("Pipeline interrupted by user.")
         sys.exit(1)

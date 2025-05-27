@@ -70,8 +70,8 @@ def analyze_dataset(
         print_player_details(sample, detailed=detailed)
 
 
-def main() -> None:
-    """Main function to parse arguments and orchestrate dataset inspection."""
+def _setup_argument_parser() -> argparse.ArgumentParser:
+    """Set up and return the argument parser for dataset inspection."""
     parser = argparse.ArgumentParser(description="Inspect churn prediction datasets")
     parser.add_argument(
         "--data-dir",
@@ -90,46 +90,32 @@ def main() -> None:
         choices=["game1", "game2"],
         help="Inspect datasets only for a specific game (e.g., 'game1' or 'game2')",
     )
+    return parser
 
-    args = parser.parse_args()
 
-    # Load settings and optionally override data directory
-    settings = get_settings()
-    if args.data_dir:
-        settings.processed_dir = Path(args.data_dir)
-
-    data_dir = settings.processed_dir
-
-    labeled_files = list(data_dir.glob("*_labeled.jsonl"))
-
-    if not labeled_files:
-        print(
-            "No labeled datasets found. Please ensure the data pipeline has been run."
-        )
-        return
-
-    if args.game:
-        labeled_files = [f for f in labeled_files if args.game in f.name]
-
-    dataset_creator = DatasetCreator(settings)
-
-    print("=" * 70)
-    print("CHURN PREDICTION DATASET INSPECTION")
-    print("=" * 70)
+def _filter_and_organize_files(labeled_files: list, game_filter: str = None) -> tuple:
+    """Filter labeled files by game and organize them into game1 and game2 lists."""
+    if game_filter:
+        labeled_files = [f for f in labeled_files if game_filter in f.name]
 
     game1_files = sorted([f for f in labeled_files if "game1" in f.name])
     game2_files = sorted([f for f in labeled_files if "game2" in f.name])
 
-    if game1_files:
-        print("\n" + "=" * 30 + " GAME 1 " + "=" * 30)
-        for file in game1_files:
-            analyze_dataset(file, dataset_creator, detailed=args.detailed)
+    return game1_files, game2_files
 
-    if game2_files:
-        print("\n" + "=" * 30 + " GAME 2 " + "=" * 30)
-        for file in game2_files:
-            analyze_dataset(file, dataset_creator, detailed=args.detailed)
 
+def _analyze_game_files(
+    game_files: list, game_name: str, dataset_creator, detailed: bool
+) -> None:
+    """Analyze and print results for files from a specific game."""
+    if game_files:
+        print("\n" + "=" * 30 + " " + game_name + " " + "=" * 30)
+        for file in game_files:
+            analyze_dataset(file, dataset_creator, detailed=detailed)
+
+
+def _print_pipeline_results(data_dir: Path, settings) -> None:
+    """Print pipeline execution results and configuration if available."""
     pipeline_results_path = data_dir / settings.pipeline_results
     if pipeline_results_path.exists():
         try:
@@ -160,6 +146,36 @@ def main() -> None:
             print(
                 f"Warning: An error occurred while reading {settings.pipeline_results}: {e}"
             )
+
+
+def main() -> None:
+    """Main function to parse arguments and orchestrate dataset inspection."""
+    parser = _setup_argument_parser()
+    args = parser.parse_args()
+
+    settings = get_settings()
+    if args.data_dir:
+        settings.processed_dir = Path(args.data_dir)
+
+    data_dir = settings.processed_dir
+    labeled_files = list(data_dir.glob("*_labeled.jsonl"))
+
+    if not labeled_files:
+        print(
+            "No labeled datasets found. Please ensure the data pipeline has been run."
+        )
+        return
+
+    game1_files, game2_files = _filter_and_organize_files(labeled_files, args.game)
+    dataset_creator = DatasetCreator(settings)
+
+    print("=" * 70)
+    print("CHURN PREDICTION DATASET INSPECTION")
+    print("=" * 70)
+
+    _analyze_game_files(game1_files, "GAME 1", dataset_creator, args.detailed)
+    _analyze_game_files(game2_files, "GAME 2", dataset_creator, args.detailed)
+    _print_pipeline_results(data_dir, settings)
 
 
 if __name__ == "__main__":
