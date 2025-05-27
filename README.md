@@ -1,11 +1,5 @@
 ## MMD Assignment 1: Telemetry-Based Churn Prediction in Mobile Racing Games
 
-**Version:** 1.0.0
-**Last Updated:** May 2025
-**Repository:** [mining-media-data-ii](https://github.com/esacon/mining-media-data-ii)
-
----
-
 ## 1. Overview & Goal
 
 This project implements churn prediction for two freemium mobile racing games using telemetry data. We analyze player behavior patterns to predict which players will stop playing (churn) within a 10-day period after observing their activity for 5 days.
@@ -203,12 +197,3 @@ The main analysis, from data loading to model evaluation and LLM integration, is
 - Hadiji, F., Sifa, R., Drachen, A., Thurau, C., Kersting, K., & Bauckhage, C. (2014). Predicting player churn in the wild. In _2014 IEEE conference on computational intelligence and games_ (pp. 1-8). IEEE.
 - Sifa, R. (2021). Predicting player churn with echo state networks.
 
----
-
-## 11. Development Guidelines
-
-- All submitted work must be original. Adhere to the university's plagiarism policy.
-- Prioritize clarity and reproducibility in your code and documentation.
-- If dealing with significantly large datasets, demonstrate consideration for efficient data processing techniques.
-- Clearly document all data preprocessing, feature engineering choices, and model training steps.
-- (Optional, but good practice) Consider including brief benchmarks or notes on memory usage if you implement specific optimizations for large data.
