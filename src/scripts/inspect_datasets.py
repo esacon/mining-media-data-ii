@@ -1,0 +1,148 @@
+import sys
+import json
+import argparse
+from pathlib import Path
+from typing import Dict, Any
+from src.utils import load_jsonl_sample, load_json, format_timestamp
+from src.data_processing.dataset_creation import DatasetCreator
+
+sys.path.append(str(Path(__file__).parent.parent))
+
+
+def print_player_details(player_data: Dict[str, Any], detailed: bool = False) -> None:
+    """Prints detailed information about a single player's labeled data.
+
+    Args:
+        player_data (Dict[str, Any]): A dictionary containing a single player's
+                                     labeled data, as produced by DatasetCreator.
+        detailed (bool): If True, also prints the first few observation events.
+    """
+    print(f"\nPlayer ID: {player_data['player_id']}")
+    print(f"Churned: {'YES' if player_data['churned'] else 'NO'}")
+    print(f"Observation Period: {player_data['op_start']} to {player_data['op_end']}")
+    print(f"Events in OP: {player_data['op_event_count']}")
+    print(f"Events in CP: {player_data['cp_event_count']}")
+
+    if detailed and player_data['observation_records']:
+        print("\nFirst 3 observation events:")
+        for i, event in enumerate(player_data['observation_records'][:3]):
+            event_type = event.get('event', 'play')
+            score = event.get('score', 'N/A')
+            time = event['time']
+
+            time_str = format_timestamp(time)
+            print(f"  {i+1}. {time_str} - {event_type} (score: {score})")
+
+
+def analyze_dataset(dataset_path: Path, dataset_creator: DatasetCreator, detailed: bool = False) -> None:
+    """Analyzes and prints statistics about a specific labeled dataset.
+
+    It loads overall statistics and displays sample player records for inspection.
+
+    Args:
+        dataset_path (Path): The full path to the labeled JSONL dataset file.
+        dataset_creator (DatasetCreator): An instance of DatasetCreator to get dataset summary.
+        detailed (bool): If True, enables detailed event printing for sample players.
+    """
+    print(f"\nAnalyzing: {dataset_path.name}")
+    print("-" * 50)
+
+    summary = dataset_creator.get_dataset_summary(dataset_path)
+
+    print(f"Total Players: {summary.get('total_players', 0):,}")
+    print(
+        f"Churned: {summary.get('churned_players', 0):,} ({summary.get('churn_rate', 0.0):.1%})")
+    print(
+        f"Retained: {summary.get('retained_players', 0):,} ({summary.get('retention_rate', 0.0):.1%})")
+    print(f"Avg events in OP: {summary.get('op_events', {}).get('mean', 0.0):.1f}")
+    print(f"Avg events in CP: {summary.get('cp_events', {}).get('mean', 0.0):.1f}")
+    print(f"Skipped records (during creation): {summary.get('skipped_count', 0):,}")
+
+    print("\nSample Players:")
+    samples = load_jsonl_sample(dataset_path, n_samples=3)
+    for sample in samples:
+        print_player_details(sample, detailed=detailed)
+
+
+def main() -> None:
+    """Main function to parse arguments and orchestrate dataset inspection."""
+    parser = argparse.ArgumentParser(description="Inspect churn prediction datasets")
+    parser.add_argument(
+        "--data-dir",
+        type=str,
+        default="src/data/processed",
+        help="Data directory where processed datasets are located (default: src/data/processed)"
+    )
+    parser.add_argument(
+        "--detailed",
+        action="store_true",
+        help="Show detailed player information (e.g., first few observation events)"
+    )
+    parser.add_argument(
+        "--game",
+        type=str,
+        choices=["game1", "game2"],
+        help="Inspect datasets only for a specific game (e.g., 'game1' or 'game2')"
+    )
+
+    args = parser.parse_args()
+
+    data_dir = Path(args.data_dir)
+
+    labeled_files = list(data_dir.glob("*_labeled.jsonl"))
+
+    if not labeled_files:
+        print("No labeled datasets found. Please ensure the data pipeline has been run.")
+        return
+
+    if args.game:
+        labeled_files = [f for f in labeled_files if args.game in f.name]
+
+    dataset_creator = DatasetCreator(data_dir=str(data_dir), output_dir=str(data_dir))
+
+    print("=" * 70)
+    print("CHURN PREDICTION DATASET INSPECTION")
+    print("=" * 70)
+
+    game1_files = sorted([f for f in labeled_files if "game1" in f.name])
+    game2_files = sorted([f for f in labeled_files if "game2" in f.name])
+
+    if game1_files:
+        print("\n" + "="*30 + " GAME 1 " + "="*30)
+        for file in game1_files:
+            analyze_dataset(file, dataset_creator, detailed=args.detailed)
+
+    if game2_files:
+        print("\n" + "="*30 + " GAME 2 " + "="*30)
+        for file in game2_files:
+            analyze_dataset(file, dataset_creator, detailed=args.detailed)
+
+    pipeline_results_path = data_dir / "pipeline_results.json"
+    if pipeline_results_path.exists():
+        try:
+            results = load_json(pipeline_results_path)
+
+            print("\n" + "="*70)
+            if 'total_execution_time' in results:
+                print(
+                    f"Total Pipeline Execution Time: {results['total_execution_time']/60:.1f} minutes")
+
+            config = results.get('configuration', {})
+            print("Pipeline Configuration:")
+            print(
+                f"  - Observation Period: {config.get('observation_days', 'N/A')} days")
+            print(f"  - Churn Period: {config.get('churn_period_days', 'N/A')} days")
+            print(f"  - Random Seed: {config.get('random_seed', 'N/A')}")
+            print(f"  - Log Level: {config.get('log_level', 'N/A')}")
+            print(f"  - Data Directory: {config.get('data_dir', 'N/A')}")
+            print(f"  - Output Directory: {config.get('output_dir', 'N/A')}")
+
+        except json.JSONDecodeError:
+            print(f"Warning: Could not read pipeline_results.json due to invalid JSON.")
+        except Exception as e:
+            print(
+                f"Warning: An error occurred while reading pipeline_results.json: {e}")
+
+
+if __name__ == "__main__":
+    main()
