@@ -7,6 +7,7 @@ from src.utils import (
     get_time_boundaries, calculate_dataset_stats, convert_timestamp,
     _get_player_id_from_record
 )
+from src.config import Settings
 
 
 class DatasetCreator(LoggerMixin):
@@ -14,29 +15,17 @@ class DatasetCreator(LoggerMixin):
     based on player event data.
     """
 
-    def __init__(
-        self,
-        data_dir: Union[str, Path] = "src/data/processed",
-        output_dir: Union[str, Path] = "src/data/processed",
-        observation_days: int = 5,
-        churn_period_days: int = 10
-    ):
+    def __init__(self, settings: Settings):
         """Initializes the DatasetCreator.
 
         Args:
-            data_dir (Union[str, Path]): The directory where pre-processed player event JSONL files are located.
-                                        Defaults to "src/data/processed".
-            output_dir (Union[str, Path]): The directory where the labeled datasets will be saved.
-                                           Defaults to "src/data/processed".
-            observation_days (int): The number of days for the observation period, starting from the
-                                    player's first event.
-            churn_period_days (int): The number of days for the churn prediction period, immediately
-                                     following the observation period.
+            settings (Settings): Configuration settings containing paths, filenames, and parameters.
         """
-        self.data_dir = Path(data_dir)
-        self.output_dir = ensure_dir(output_dir)
-        self.observation_days = observation_days
-        self.churn_period_days = churn_period_days
+        self.settings = settings
+        self.data_dir = settings.processed_dir
+        self.output_dir = ensure_dir(settings.processed_dir)
+        self.observation_days = settings.observation_days
+        self.churn_period_days = settings.churn_period_days
 
     def process_player_records(self, player_data: Dict) -> Optional[Dict]:
         """Processes a single player's raw event records to create a labeled data point.
@@ -83,7 +72,6 @@ class DatasetCreator(LoggerMixin):
 
         churned = len(churn_period_records) == 0
 
-        # Use the utility function for consistent player ID extraction
         player_id = _get_player_id_from_record(player_data, None)
 
         return {
@@ -109,7 +97,7 @@ class DatasetCreator(LoggerMixin):
         Args:
             input_file (Union[str, Path]): The name of the input JSONL file (relative to `self.data_dir`).
             output_prefix (str): A prefix for the output labeled JSONL file and its statistics file.
-                                 The output file will be named "{output_prefix}_labeled.jsonl".
+                                 The output file will be named "{output_prefix}{labeled_suffix}".
 
         Returns:
             Path: The full path to the generated labeled JSONL file.
@@ -117,7 +105,7 @@ class DatasetCreator(LoggerMixin):
         self.logger.info(f"Creating dataset from {input_file}...")
 
         input_path = self.data_dir / input_file
-        output_file_name = f"{output_prefix}_labeled.jsonl"
+        output_file_name = f"{output_prefix}{self.settings.labeled_suffix}"
         output_path = self.output_dir / output_file_name
 
         processed_count = 0
@@ -160,15 +148,14 @@ class DatasetCreator(LoggerMixin):
         """
         self.logger.info("Creating all datasets (DS1 and DS2 for both games)...")
 
-        # These filenames are expected from the DataPreparation step
         datasets_to_process = {
             "game1": {
-                "train": "game1_player_events_train.jsonl",
-                "eval": "game1_player_events_eval.jsonl"
+                "train": self.settings.game1_train,
+                "eval": self.settings.game1_eval
             },
             "game2": {
-                "train": "playerLogs_game2_playerbasedlines_train.jsonl",
-                "eval": "playerLogs_game2_playerbasedlines_eval.jsonl"
+                "train": self.settings.game2_train,
+                "eval": self.settings.game2_eval
             }
         }
 
@@ -185,7 +172,7 @@ class DatasetCreator(LoggerMixin):
             ds2_path = self.create_dataset(files["eval"], f"{game}_DS2")
             results[game]["DS2"] = ds2_path.name
 
-        save_json(results, self.output_dir / "dataset_creation_results.json")
+        save_json(results, self.output_dir / self.settings.dataset_creation_results)
 
         self.logger.info("All datasets created successfully!")
         return results

@@ -41,8 +41,32 @@ class Settings:
     train_ratio: float = 0.8
     random_seed: int = 42
 
+    # Input files
     game1_csv: str = "dataset_1_game1/rawdata_game1.csv"
     game2_jsonl: str = "dataset_2_game2/playerLogs_game2_playerbasedlines.jsonl"
+    
+    # Intermediate files
+    game1_converted: str = "game1_player_events.jsonl"
+    game1_train: str = "game1_player_events_train.jsonl"
+    game1_eval: str = "game1_player_events_eval.jsonl"
+    game2_train: str = "playerLogs_game2_playerbasedlines_train.jsonl"
+    game2_eval: str = "playerLogs_game2_playerbasedlines_eval.jsonl"
+    
+    # Final labeled datasets
+    game1_ds1: str = "game1_DS1_labeled.jsonl"
+    game1_ds2: str = "game1_DS2_labeled.jsonl"
+    game2_ds1: str = "game2_DS1_labeled.jsonl"
+    game2_ds2: str = "game2_DS2_labeled.jsonl"
+    
+    # Result files
+    preparation_results: str = "preparation_results.json"
+    dataset_creation_results: str = "dataset_creation_results.json"
+    pipeline_results: str = "pipeline_results.json"
+    
+    # File suffixes
+    train_suffix: str = "_train.jsonl"
+    eval_suffix: str = "_eval.jsonl"
+    labeled_suffix: str = "_labeled.jsonl"
 
     log_level: str = "INFO"
     log_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -117,6 +141,35 @@ class Settings:
                     settings.logs_dir = settings.project_root / paths['logs_dir']
                 if 'results_dir' in paths:
                     settings.results_dir = settings.project_root / paths['results_dir']
+
+            if 'filenames' in config:
+                filenames = config['filenames']
+                # Input files
+                settings.game1_csv = filenames.get('game1_csv', settings.game1_csv)
+                settings.game2_jsonl = filenames.get('game2_jsonl', settings.game2_jsonl)
+                
+                # Intermediate files
+                settings.game1_converted = filenames.get('game1_converted', settings.game1_converted)
+                settings.game1_train = filenames.get('game1_train', settings.game1_train)
+                settings.game1_eval = filenames.get('game1_eval', settings.game1_eval)
+                settings.game2_train = filenames.get('game2_train', settings.game2_train)
+                settings.game2_eval = filenames.get('game2_eval', settings.game2_eval)
+                
+                # Final labeled datasets
+                settings.game1_ds1 = filenames.get('game1_ds1', settings.game1_ds1)
+                settings.game1_ds2 = filenames.get('game1_ds2', settings.game1_ds2)
+                settings.game2_ds1 = filenames.get('game2_ds1', settings.game2_ds1)
+                settings.game2_ds2 = filenames.get('game2_ds2', settings.game2_ds2)
+                
+                # Result files
+                settings.preparation_results = filenames.get('preparation_results', settings.preparation_results)
+                settings.dataset_creation_results = filenames.get('dataset_creation_results', settings.dataset_creation_results)
+                settings.pipeline_results = filenames.get('pipeline_results', settings.pipeline_results)
+                
+                # File suffixes
+                settings.train_suffix = filenames.get('train_suffix', settings.train_suffix)
+                settings.eval_suffix = filenames.get('eval_suffix', settings.eval_suffix)
+                settings.labeled_suffix = filenames.get('labeled_suffix', settings.labeled_suffix)
 
             if 'logging' in config:
                 log = config['logging']

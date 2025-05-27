@@ -40,17 +40,9 @@ class DataPipeline(LoggerMixin):
             format_string=self.settings.log_format
         )
 
-        self.data_prep = DataPreparation(
-            data_dir=str(self.data_dir),
-            output_dir=str(self.output_dir)
-        )
-
-        self.dataset_creator = DatasetCreator(
-            data_dir=str(self.output_dir),
-            output_dir=str(self.output_dir),
-            observation_days=self.observation_days,
-            churn_period_days=self.churn_period_days
-        )
+        # Initialize data preparation and dataset creation components
+        self.data_prep = DataPreparation(settings)
+        self.dataset_creator = DatasetCreator(settings)
 
     def run_preparation(self) -> Dict[str, Any]:
         """Runs the data preparation step of the pipeline.
@@ -185,10 +177,10 @@ class DataPipeline(LoggerMixin):
                 }
             }
 
-            save_json(pipeline_results, self.output_dir / "pipeline_results.json")
+            save_json(pipeline_results, self.output_dir / self.settings.pipeline_results)
 
             self.logger.info(
-                f"\nPipeline results saved to: {self.output_dir}/pipeline_results.json")
+                f"\nPipeline results saved to: {self.output_dir}/{self.settings.pipeline_results}")
             self.logger.info("\nNext steps:")
             self.logger.info("  1. Run feature engineering on the labeled datasets")
             self.logger.info("  2. Train and evaluate churn prediction models")

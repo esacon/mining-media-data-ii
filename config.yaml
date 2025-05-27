@@ -14,6 +14,35 @@ paths:
   logs_dir: "logs"
   results_dir: "results"
 
+# File Names Configuration
+filenames:
+  # Input files
+  game1_csv: "dataset_1_game1/rawdata_game1.csv"
+  game2_jsonl: "dataset_2_game2/playerLogs_game2_playerbasedlines.jsonl"
+  
+  # Intermediate files (after conversion and splitting)
+  game1_converted: "game1_player_events.jsonl"
+  game1_train: "game1_player_events_train.jsonl"
+  game1_eval: "game1_player_events_eval.jsonl"
+  game2_train: "playerLogs_game2_playerbasedlines_train.jsonl"
+  game2_eval: "playerLogs_game2_playerbasedlines_eval.jsonl"
+  
+  # Final labeled datasets
+  game1_ds1: "game1_DS1_labeled.jsonl"
+  game1_ds2: "game1_DS2_labeled.jsonl"
+  game2_ds1: "game2_DS1_labeled.jsonl"
+  game2_ds2: "game2_DS2_labeled.jsonl"
+  
+  # Result files
+  preparation_results: "preparation_results.json"
+  dataset_creation_results: "dataset_creation_results.json"
+  pipeline_results: "pipeline_results.json"
+  
+  # File suffixes
+  train_suffix: "_train.jsonl"
+  eval_suffix: "_eval.jsonl"
+  labeled_suffix: "_labeled.jsonl"
+
 # Logging Configuration
 logging:
   level: "INFO"                # DEBUG, INFO, WARNING, ERROR, CRITICAL

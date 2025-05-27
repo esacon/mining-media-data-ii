@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Dict, Any
 from src.utils import load_jsonl_sample, load_json, format_timestamp
 from src.data_processing.dataset_creation import DatasetCreator
+from src.config import get_settings
 
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -70,8 +71,8 @@ def main() -> None:
     parser.add_argument(
         "--data-dir",
         type=str,
-        default="src/data/processed",
-        help="Data directory where processed datasets are located (default: src/data/processed)"
+        default=None,
+        help="Data directory where processed datasets are located (overrides config)"
     )
     parser.add_argument(
         "--detailed",
@@ -87,7 +88,12 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    data_dir = Path(args.data_dir)
+    # Load settings and optionally override data directory
+    settings = get_settings()
+    if args.data_dir:
+        settings.processed_dir = Path(args.data_dir)
+
+    data_dir = settings.processed_dir
 
     labeled_files = list(data_dir.glob("*_labeled.jsonl"))
 
@@ -98,7 +104,7 @@ def main() -> None:
     if args.game:
         labeled_files = [f for f in labeled_files if args.game in f.name]
 
-    dataset_creator = DatasetCreator(data_dir=str(data_dir), output_dir=str(data_dir))
+    dataset_creator = DatasetCreator(settings)
 
     print("=" * 70)
     print("CHURN PREDICTION DATASET INSPECTION")
@@ -117,7 +123,7 @@ def main() -> None:
         for file in game2_files:
             analyze_dataset(file, dataset_creator, detailed=args.detailed)
 
-    pipeline_results_path = data_dir / "pipeline_results.json"
+    pipeline_results_path = data_dir / settings.pipeline_results
     if pipeline_results_path.exists():
         try:
             results = load_json(pipeline_results_path)
@@ -138,10 +144,10 @@ def main() -> None:
             print(f"  - Output Directory: {config.get('output_dir', 'N/A')}")
 
         except json.JSONDecodeError:
-            print(f"Warning: Could not read pipeline_results.json due to invalid JSON.")
+            print(f"Warning: Could not read {settings.pipeline_results} due to invalid JSON.")
         except Exception as e:
             print(
-                f"Warning: An error occurred while reading pipeline_results.json: {e}")
+                f"Warning: An error occurred while reading {settings.pipeline_results}: {e}")
 
 
 if __name__ == "__main__":

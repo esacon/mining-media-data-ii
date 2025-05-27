@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Dict, Tuple, Union
 
 from src.utils import LoggerMixin, ensure_dir, get_player_ids, split_jsonl_by_ids, save_json
+from src.config import Settings
 
 
 class DataPreparation(LoggerMixin):
@@ -12,22 +13,20 @@ class DataPreparation(LoggerMixin):
     and splitting datasets into train and evaluation sets.
     """
 
-    def __init__(self, data_dir: Union[str, Path] = "src/data", output_dir: Union[str, Path] = "src/data/processed"):
+    def __init__(self, settings: Settings):
         """Initializes the DataPreparation class.
 
         Args:
-            data_dir (Union[str, Path]): The directory where raw input data is located.
-                                        Defaults to "src/data".
-            output_dir (Union[str, Path]): The directory where processed data will be saved.
-                                           Defaults to "src/data/processed".
+            settings (Settings): Configuration settings containing paths and filenames.
         """
-        self.data_dir = Path(data_dir)
-        self.output_dir = ensure_dir(output_dir)
+        self.settings = settings
+        self.data_dir = settings.data_dir
+        self.output_dir = ensure_dir(settings.processed_dir)
 
     def convert_game1_to_jsonl(
         self,
-        input_file: Union[str, Path] = "dataset_1_game1/rawdata_game1.csv",
-        output_file: Union[str, Path] = "game1_player_events.jsonl"
+        input_file: Union[str, Path] = None,
+        output_file: Union[str, Path] = None
     ) -> Path:
         """Converts Game 1 CSV data to JSONL format, with one JSON object per player.
 
@@ -36,9 +35,9 @@ class DataPreparation(LoggerMixin):
 
         Args:
             input_file (Union[str, Path]): The path to the input CSV file relative to `self.data_dir`.
-                                           Defaults to "dataset_1_game1/rawdata_game1.csv".
+                                           Defaults to settings.game1_csv.
             output_file (Union[str, Path]): The name of the output JSONL file, saved in `self.output_dir`.
-                                            Defaults to "game1_player_events.jsonl".
+                                            Defaults to settings.game1_converted.
 
         Returns:
             Path: The full path to the generated JSONL file.
@@ -47,6 +46,11 @@ class DataPreparation(LoggerMixin):
             FileNotFoundError: If the input CSV file does not exist.
         """
         self.logger.info("Converting Game 1 data from CSV to JSONL...")
+
+        if input_file is None:
+            input_file = self.settings.game1_csv
+        if output_file is None:
+            output_file = self.settings.game1_converted
 
         input_path = self.data_dir / input_file
         if not input_path.exists():
@@ -86,8 +90,8 @@ class DataPreparation(LoggerMixin):
     def split_dataset(
         self,
         jsonl_file: Union[str, Path],
-        train_ratio: float = 0.8,
-        seed: int = 42
+        train_ratio: float = None,
+        seed: int = None
     ) -> Tuple[Path, Path]:
         """Splits a JSONL dataset into training and evaluation sets based on player IDs.
 
@@ -96,9 +100,9 @@ class DataPreparation(LoggerMixin):
                                            it's assumed to be in `self.output_dir`; otherwise,
                                            it's assumed to be in `self.data_dir`.
             train_ratio (float): The proportion of players to include in the training set.
-                                 Defaults to 0.8.
+                                 Defaults to settings.train_ratio.
             seed (int): The random seed for shuffling player IDs to ensure reproducibility.
-                        Defaults to 42.
+                        Defaults to settings.random_seed.
 
         Returns:
             Tuple[Path, Path]: A tuple containing the full paths to the generated
@@ -107,6 +111,11 @@ class DataPreparation(LoggerMixin):
         Raises:
             FileNotFoundError: If the input JSONL file does not exist.
         """
+        if train_ratio is None:
+            train_ratio = self.settings.train_ratio
+        if seed is None:
+            seed = self.settings.random_seed
+
         self.logger.info(f"Splitting {jsonl_file} into train/eval sets...")
 
         if isinstance(jsonl_file, Path):
@@ -130,22 +139,19 @@ class DataPreparation(LoggerMixin):
         eval_ids = set(player_ids[split_idx:])
 
         base_name = Path(jsonl_file).stem
-        train_file_name = f"{base_name}_train.jsonl"
-        eval_file_name = f"{base_name}_eval.jsonl"
+        train_file_name = f"{base_name}{self.settings.train_suffix}"
+        eval_file_name = f"{base_name}{self.settings.eval_suffix}"
 
         train_path = self.output_dir / train_file_name
         eval_path = self.output_dir / eval_file_name
 
-        # Assuming the original JSONL files for Game 1 and Game 2 use "device_id" or "uid" as player IDs.
-        # This parameter would be used if there was a consistent, predefined field.
-        # For auto-detection, `id_field=None` is correct based on _get_player_id_from_record logic.
         results = split_jsonl_by_ids(
             input_file=input_path,
             train_ids=train_ids,
             eval_ids=eval_ids,
             train_output=train_path,
             eval_output=eval_path,
-            id_field=None  # Retain auto-detection
+            id_field=None
         )
 
         self.logger.info(
@@ -173,7 +179,7 @@ class DataPreparation(LoggerMixin):
         game1_train_path, game1_eval_path = self.split_dataset(game1_jsonl_path)
 
         game2_train_path, game2_eval_path = self.split_dataset(
-            self.data_dir / "dataset_2_game2/playerLogs_game2_playerbasedlines.jsonl"
+            self.data_dir / self.settings.game2_jsonl
         )
 
         results = {
@@ -187,7 +193,7 @@ class DataPreparation(LoggerMixin):
             }
         }
 
-        save_json(results, self.output_dir / "preparation_results.json")
+        save_json(results, self.output_dir / self.settings.preparation_results)
 
         self.logger.info("Data preparation complete!")
         return results
