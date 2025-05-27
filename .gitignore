@@ -78,6 +78,8 @@ logs/
 
 # Data files (project specific)
 src/data/dataset_game2/playerLogs_game2_playerbasedlines.jsonl
+src/data/processed/*.jsonl
+src/data/processed/*.json
 
 # Results and outputs
 results/
