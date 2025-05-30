@@ -1,9 +1,17 @@
+from typing import Any, Dict
+
 import pandas as pd
 from sklearn.linear_model import LogisticRegression as SklearnLogisticRegression
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
-from typing import Dict, Any
+from sklearn.metrics import (
+    accuracy_score,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
 
 from .base_classifier import BaseClassifier
+
 
 class LogisticRegressionClassifier(BaseClassifier):
     """
@@ -22,11 +30,13 @@ class LogisticRegressionClassifier(BaseClassifier):
         """
         super().__init__(model_params, logger)
         # Ensure 'solver' is appropriate if not specified, e.g., 'liblinear' for small datasets
-        if 'solver' not in self.model_params:
-            self.model_params['solver'] = 'liblinear'
+        if "solver" not in self.model_params:
+            self.model_params["solver"] = "liblinear"
         self.model = SklearnLogisticRegression(**self.model_params)
         if self.logger:
-            self.logger.debug(f"SklearnLogisticRegression initialized with params: {self.model_params}")
+            self.logger.debug(
+                f"SklearnLogisticRegression initialized with params: {self.model_params}"
+            )
 
     def train(self, X_train: pd.DataFrame, y_train: pd.Series) -> None:
         """
@@ -44,7 +54,9 @@ class LogisticRegressionClassifier(BaseClassifier):
                 print("Logistic Regression model trained successfully.")
         except Exception as e:
             if self.logger:
-                self.logger.error(f"Error training Logistic Regression model: {e}", exc_info=True)
+                self.logger.error(
+                    f"Error training Logistic Regression model: {e}", exc_info=True
+                )
             else:
                 print(f"Error training Logistic Regression model: {e}")
             raise
@@ -58,22 +70,28 @@ class LogisticRegressionClassifier(BaseClassifier):
 
         Returns:
             pd.Series: Predicted labels.
-        
+
         Raises:
             ValueError: If the model has not been trained yet.
         """
-        if self.model is None or not hasattr(self.model, 'coef_'): # Check if model is fitted
+        if self.model is None or not hasattr(
+            self.model, "coef_"
+        ):  # Check if model is fitted
             error_msg = "Model not trained yet or training failed. Call train() first."
-            if self.logger: self.logger.error(error_msg)
-            else: print(error_msg)
+            if self.logger:
+                self.logger.error(error_msg)
+            else:
+                print(error_msg)
             raise ValueError(error_msg)
-        
+
         try:
             predictions = self.model.predict(X_test)
             return pd.Series(predictions, index=X_test.index, name="predictions")
         except Exception as e:
             if self.logger:
-                self.logger.error(f"Error during Logistic Regression prediction: {e}", exc_info=True)
+                self.logger.error(
+                    f"Error during Logistic Regression prediction: {e}", exc_info=True
+                )
             else:
                 print(f"Error during Logistic Regression prediction: {e}")
             raise
@@ -87,22 +105,31 @@ class LogisticRegressionClassifier(BaseClassifier):
 
         Returns:
             pd.DataFrame: Class probabilities. Columns are class labels.
-        
+
         Raises:
             ValueError: If the model has not been trained yet.
         """
-        if self.model is None or not hasattr(self.model, 'coef_'): # Check if model is fitted
+        if self.model is None or not hasattr(
+            self.model, "coef_"
+        ):  # Check if model is fitted
             error_msg = "Model not trained yet or training failed. Call train() first."
-            if self.logger: self.logger.error(error_msg)
-            else: print(error_msg)
+            if self.logger:
+                self.logger.error(error_msg)
+            else:
+                print(error_msg)
             raise ValueError(error_msg)
-        
+
         try:
             probabilities = self.model.predict_proba(X_test)
-            return pd.DataFrame(probabilities, index=X_test.index, columns=self.model.classes_)
+            return pd.DataFrame(
+                probabilities, index=X_test.index, columns=self.model.classes_
+            )
         except Exception as e:
             if self.logger:
-                self.logger.error(f"Error during Logistic Regression probability prediction: {e}", exc_info=True)
+                self.logger.error(
+                    f"Error during Logistic Regression probability prediction: {e}",
+                    exc_info=True,
+                )
             else:
                 print(f"Error during Logistic Regression probability prediction: {e}")
             raise
@@ -130,15 +157,22 @@ class LogisticRegressionClassifier(BaseClassifier):
                 if len(y_test.unique()) > 1 and len(self.model.classes_) > 1:
                     y_pred_proba = self.predict_proba(X_test)
                     if y_pred_proba.shape[1] > 1:
-                        metrics["roc_auc"] = roc_auc_score(y_test, y_pred_proba.iloc[:, 1])
+                        metrics["roc_auc"] = roc_auc_score(
+                            y_test, y_pred_proba.iloc[:, 1]
+                        )
                     else:
                         metrics["roc_auc"] = 0.0
-                        if self.logger: self.logger.warning("ROC AUC cannot be computed for single-class probability output.")
+                        if self.logger:
+                            self.logger.warning(
+                                "ROC AUC cannot be computed for single-class probability output."
+                            )
                 else:
-                    metrics["roc_auc"] = float('nan')
+                    metrics["roc_auc"] = float("nan")
                     if self.logger:
-                        self.logger.warning("ROC AUC score calculation skipped: requires multi-class labels and predictions.")
-            
+                        self.logger.warning(
+                            "ROC AUC score calculation skipped: requires multi-class labels and predictions."
+                        )
+
             if self.logger:
                 self.logger.info(f"Logistic Regression evaluation metrics: {metrics}")
             else:
@@ -146,8 +180,10 @@ class LogisticRegressionClassifier(BaseClassifier):
 
         except Exception as e:
             if self.logger:
-                self.logger.error(f"Error during Logistic Regression evaluation: {e}", exc_info=True)
+                self.logger.error(
+                    f"Error during Logistic Regression evaluation: {e}", exc_info=True
+                )
             else:
                 print(f"Error during Logistic Regression evaluation: {e}")
-        
+
         return metrics

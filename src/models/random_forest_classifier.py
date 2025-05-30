@@ -1,9 +1,17 @@
+from typing import Any, Dict
+
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier as SklearnRandomForestClassifier
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
-from typing import Dict, Any
+from sklearn.metrics import (
+    accuracy_score,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
 
 from .base_classifier import BaseClassifier
+
 
 class RandomForestClassifier(BaseClassifier):
     """
@@ -23,8 +31,9 @@ class RandomForestClassifier(BaseClassifier):
         super().__init__(model_params, logger)
         self.model = SklearnRandomForestClassifier(**self.model_params)
         if self.logger:
-            self.logger.debug(f"SklearnRandomForestClassifier initialized with params: {self.model_params}")
-
+            self.logger.debug(
+                f"SklearnRandomForestClassifier initialized with params: {self.model_params}"
+            )
 
     def train(self, X_train: pd.DataFrame, y_train: pd.Series) -> None:
         """
@@ -42,7 +51,9 @@ class RandomForestClassifier(BaseClassifier):
                 print("Random Forest model trained successfully.")
         except Exception as e:
             if self.logger:
-                self.logger.error(f"Error training Random Forest model: {e}", exc_info=True)
+                self.logger.error(
+                    f"Error training Random Forest model: {e}", exc_info=True
+                )
             else:
                 print(f"Error training Random Forest model: {e}")
             raise
@@ -60,18 +71,24 @@ class RandomForestClassifier(BaseClassifier):
         Raises:
             ValueError: If the model has not been trained yet.
         """
-        if self.model is None or not hasattr(self.model, 'estimators_'): # Check if model is fitted
+        if self.model is None or not hasattr(
+            self.model, "estimators_"
+        ):  # Check if model is fitted
             error_msg = "Model not trained yet or training failed. Call train() first."
-            if self.logger: self.logger.error(error_msg)
-            else: print(error_msg)
+            if self.logger:
+                self.logger.error(error_msg)
+            else:
+                print(error_msg)
             raise ValueError(error_msg)
-        
+
         try:
             predictions = self.model.predict(X_test)
             return pd.Series(predictions, index=X_test.index, name="predictions")
         except Exception as e:
             if self.logger:
-                self.logger.error(f"Error during Random Forest prediction: {e}", exc_info=True)
+                self.logger.error(
+                    f"Error during Random Forest prediction: {e}", exc_info=True
+                )
             else:
                 print(f"Error during Random Forest prediction: {e}")
             raise
@@ -89,18 +106,27 @@ class RandomForestClassifier(BaseClassifier):
         Raises:
             ValueError: If the model has not been trained yet.
         """
-        if self.model is None or not hasattr(self.model, 'estimators_'): # Check if model is fitted
+        if self.model is None or not hasattr(
+            self.model, "estimators_"
+        ):  # Check if model is fitted
             error_msg = "Model not trained yet or training failed. Call train() first."
-            if self.logger: self.logger.error(error_msg)
-            else: print(error_msg)
+            if self.logger:
+                self.logger.error(error_msg)
+            else:
+                print(error_msg)
             raise ValueError(error_msg)
 
         try:
             probabilities = self.model.predict_proba(X_test)
-            return pd.DataFrame(probabilities, index=X_test.index, columns=self.model.classes_)
+            return pd.DataFrame(
+                probabilities, index=X_test.index, columns=self.model.classes_
+            )
         except Exception as e:
             if self.logger:
-                self.logger.error(f"Error during Random Forest probability prediction: {e}", exc_info=True)
+                self.logger.error(
+                    f"Error during Random Forest probability prediction: {e}",
+                    exc_info=True,
+                )
             else:
                 print(f"Error during Random Forest probability prediction: {e}")
             raise
@@ -128,15 +154,22 @@ class RandomForestClassifier(BaseClassifier):
                 if len(y_test.unique()) > 1 and len(self.model.classes_) > 1:
                     y_pred_proba = self.predict_proba(X_test)
                     if y_pred_proba.shape[1] > 1:
-                        metrics["roc_auc"] = roc_auc_score(y_test, y_pred_proba.iloc[:, 1])
+                        metrics["roc_auc"] = roc_auc_score(
+                            y_test, y_pred_proba.iloc[:, 1]
+                        )
                     else:
                         metrics["roc_auc"] = 0.0
-                        if self.logger: self.logger.warning("ROC AUC cannot be computed for single-class probability output.")
+                        if self.logger:
+                            self.logger.warning(
+                                "ROC AUC cannot be computed for single-class probability output."
+                            )
                 else:
-                    metrics["roc_auc"] = float('nan')
+                    metrics["roc_auc"] = float("nan")
                     if self.logger:
-                        self.logger.warning("ROC AUC score calculation skipped: requires multi-class labels and predictions.")
-            
+                        self.logger.warning(
+                            "ROC AUC score calculation skipped: requires multi-class labels and predictions."
+                        )
+
             if self.logger:
                 self.logger.info(f"Random Forest evaluation metrics: {metrics}")
             else:
@@ -144,8 +177,10 @@ class RandomForestClassifier(BaseClassifier):
 
         except Exception as e:
             if self.logger:
-                self.logger.error(f"Error during Random Forest evaluation: {e}", exc_info=True)
+                self.logger.error(
+                    f"Error during Random Forest evaluation: {e}", exc_info=True
+                )
             else:
                 print(f"Error during Random Forest evaluation: {e}")
-        
+
         return metrics
