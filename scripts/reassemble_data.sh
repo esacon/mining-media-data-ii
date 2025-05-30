@@ -6,7 +6,7 @@
 echo "Reassembling playerLogs_game2_playerbasedlines.jsonl..."
 
 # Check if the parts exist
-if [ ! -f "src/data/dataset_2/playerLogs_game2_playerbasedlines_part_aa" ]; then
+if [ ! -f "src/data/dataset_game2/playerLogs_game2_playerbasedlines_part_aa" ]; then
     echo "Error: Split parts not found. Make sure you're running this from the project root."
     exit 1
 fi
