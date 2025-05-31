@@ -10,7 +10,6 @@ from src.utils import (
     LoggerMixin,
     ensure_dir,
     get_player_ids,
-    save_json,
     split_jsonl_by_ids,
 )
 
@@ -164,7 +163,6 @@ class DataPreparation(LoggerMixin):
 
         This includes converting Game 1 CSV data to JSONL and then splitting
         both Game 1 and Game 2 data into training and evaluation sets.
-        Results (filenames of the split datasets) are saved to a JSON file.
 
         Returns:
             Dict[str, Dict[str, str]]: A dictionary containing the names of the
@@ -184,8 +182,6 @@ class DataPreparation(LoggerMixin):
             "game1": {"train": game1_train_path.name, "eval": game1_eval_path.name},
             "game2": {"train": game2_train_path.name, "eval": game2_eval_path.name},
         }
-
-        save_json(results, self.output_dir / self.settings.preparation_results)
 
         self.logger.info("Data preparation complete!")
         return results

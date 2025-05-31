@@ -24,6 +24,7 @@ project-1/
 │   └── tests/                        # Unit tests
 ├── logs/                             # Log files
 ├── results/                          # Analysis results
+│   └── features/                     # Extracted feature CSV files
 └── requirements.txt                  # Dependencies
 ```
 
@@ -147,12 +148,13 @@ The pipeline script supports various options:
 - [x] Label players as "churned" (no activity in CP) or "not churned" based on event occurrence
 - [x] Create DS2 (evaluation dataset) from the 20% evaluation split using the same OP, CP, and labeling process
 
-### Feature Engineering
+### Feature Engineering ✅
 
-- [ ] Extract behavioral features from the 5-day observation periods (OP) in DS1
-- [ ] Implement common features as described in Kim et al. (2017) (e.g., playCount, activeDuration, bestScore, meanScore)
-- [ ] Add game-specific features (e.g., purchase data for Game 2, if applicable and identifiable in logs)
-- [ ] Apply the same feature extraction steps to DS2
+- [x] Extract behavioral features from the 5-day observation periods (OP) in DS1
+- [x] Implement common features as described in Kim et al. (2017) (e.g., playCount, activeDuration, bestScore, meanScore)
+- [x] Add game-specific features (e.g., purchase data for Game 2, if applicable and identifiable in logs)
+- [x] Apply the same feature extraction steps to DS2
+- [x] Generate CSV files with extracted features ready for machine learning
 
 ### Model Training & Evaluation
 
@@ -172,7 +174,8 @@ The pipeline script supports various options:
 ### Documentation & Submission
 
 - [x] Document the data processing pipeline and methodology
-- [ ] Document feature engineering and model training processes
+- [x] Document feature engineering processes
+- [ ] Document model training processes
 - [ ] Ensure all results and model comparisons are clearly presented
 - [ ] Prepare for a potential presentation/discussion of the results
 
@@ -197,7 +200,54 @@ This project utilizes telemetry data from the first two freemium mobile racing g
 
 ---
 
-## 6. Key Technologies & Libraries
+## 6. Feature Engineering
+
+The project implements comprehensive feature extraction following Kim et al. (2017) methodology:
+
+### Common Features (Both Games)
+
+From the original Kim et al. (2017) paper, **10 common features** are extracted focusing on user play patterns and game scores:
+
+#### **Play Pattern Features**
+- **playCount**: Total number of plays in observation period
+- **activeDuration**: Time difference between last and first play in observation period
+- **consecutivePlayRatio**: Ratio of consecutive plays (where time between plays < threshold)
+
+#### **Score-Related Features**
+- **bestScore**: Maximum score achieved during observation period
+- **meanScore**: Average score during observation period
+- **worstScore**: Minimum score achieved during observation period
+- **sdScore**: Standard deviation of scores in observation period
+- **bestScoreIndex**: Index of best score normalized by play count
+- **bestSubMeanCount**: Difference between best and mean score, normalized by play count
+- **bestSubMeanRatio**: Ratio between (best score - mean score) and mean score
+
+### Game-Specific Features
+
+Following Kim et al. (2017), **game-specific features** are extracted based on game characteristics:
+
+#### **Game 2 Only (Racing Game with Purchases)**
+- **purchaseCount**: Total number of vehicle purchases in observation period
+- **highestPrice**: Highest price among vehicle purchases in observation period
+
+### Feature Ranking Results
+
+Based on Kim et al. (2017) findings:
+
+1. **Most Important**: `activeDuration` and `playCount` (play-time metrics)
+2. **Least Important**: `meanScore` (varies too much between players)
+3. **Game-Specific**: Purchase features (Game 2) ranked 3rd-5th in importance
+4. **Key Insight**: Only **2-3 features** needed for effective churn prediction
+
+### Feature Files Generated
+- `results/features/game1_DS1_features.csv` - Game 1 training features
+- `results/features/game1_DS2_features.csv` - Game 1 evaluation features
+- `results/features/game2_DS1_features.csv` - Game 2 training features
+- `results/features/game2_DS2_features.csv` - Game 2 evaluation features
+
+---
+
+## 7. Key Technologies & Libraries
 
 ### Core Libraries
 - **Data Handling**: `polars` (primary), `pandas`, `json`
@@ -216,7 +266,7 @@ This project utilizes telemetry data from the first two freemium mobile racing g
 
 ---
 
-## 7. Configuration
+## 8. Configuration
 
 The project uses a YAML-based configuration system for easy parameter management and centralized filename configuration. The main configuration file is `config.yaml` in the project root.
 
@@ -236,35 +286,58 @@ paths:
   processed_dir: "src/data/processed"
   logs_dir: "logs"
   results_dir: "results"
+  features_dir: "results/features"
 
 # File Names Configuration
 filenames:
   # Input files
   game1_csv: "dataset_game1/rawdata_game1.csv"
   game2_jsonl: "dataset_game2/playerLogs_game2_playerbasedlines.jsonl"
-  
+
   # Intermediate files (after conversion and splitting)
   game1_converted: "game1_player_events.jsonl"
   game1_train: "game1_player_events_train.jsonl"
   game1_eval: "game1_player_events_eval.jsonl"
   game2_train: "playerLogs_game2_playerbasedlines_train.jsonl"
   game2_eval: "playerLogs_game2_playerbasedlines_eval.jsonl"
-  
+
   # Final labeled datasets
   game1_ds1: "game1_DS1_labeled.jsonl"
   game1_ds2: "game1_DS2_labeled.jsonl"
   game2_ds1: "game2_DS1_labeled.jsonl"
   game2_ds2: "game2_DS2_labeled.jsonl"
-  
-  # Result files
-  preparation_results: "preparation_results.json"
-  dataset_creation_results: "dataset_creation_results.json"
-  pipeline_results: "pipeline_results.json"
-  
+
+  # Feature files
+  game1_ds1_features: "game1_DS1_features.csv"
+  game1_ds2_features: "game1_DS2_features.csv"
+  game2_ds1_features: "game2_DS1_features.csv"
+  game2_ds2_features: "game2_DS2_features.csv"
+
   # File suffixes
   train_suffix: "_train.jsonl"
   eval_suffix: "_eval.jsonl"
   labeled_suffix: "_labeled.jsonl"
+  features_suffix: "_features.csv"
+
+# Feature Engineering Configuration
+feature_engineering:
+  # 10 Common features from Kim et al. (2017)
+  common_features:
+    - "playCount"              # Total number of plays in observation period
+    - "bestScore"              # Maximum score achieved
+    - "meanScore"              # Average score
+    - "worstScore"             # Minimum score achieved
+    - "sdScore"                # Standard deviation of scores
+    - "bestScoreIndex"         # Index of best score (normalized)
+    - "bestSubMeanCount"       # (Best - Mean) / Play count
+    - "bestSubMeanRatio"       # (Best - Mean) / Mean
+    - "activeDuration"         # Time between first and last play (hours)
+    - "consecutivePlayRatio"   # Ratio of consecutive plays
+
+  # Game 2 specific features (Kim et al. 2017)
+  game2_specific_features:
+    - "purchaseCount"          # Total number of vehicle purchases
+    - "highestPrice"           # Highest price among purchases
 
 # Logging Configuration
 logging:
@@ -285,7 +358,7 @@ performance:
    data_processing:
      observation_days: 7        # Changed from 5 to 7
      churn_period_days: 14      # Changed from 10 to 14
-   
+
    filenames:
      labeled_suffix: "_churn_labeled.jsonl"  # Custom naming
    ```
@@ -310,9 +383,9 @@ performance:
 
 ---
 
-## 8. Data Processing Pipeline
+## 9. Data Processing Pipeline
 
-The pipeline consists of two main steps:
+The pipeline consists of three main steps:
 
 ### Step 1: Data Preparation
 - Converts Game 1 CSV to JSONL format
@@ -325,16 +398,26 @@ The pipeline consists of two main steps:
 - Labels players as churned if no events in churn period
 - Creates DS1 (training) and DS2 (evaluation) datasets
 
+### Step 3: Feature Extraction
+- Extracts behavioral features from observation period data
+- Implements common features from Kim et al. (2017) research
+- Includes game-specific features for Game 2 (purchase behavior)
+- Generates CSV files ready for machine learning
+
 ### Output Files
 - `game1_DS1_labeled.jsonl` - Game 1 training dataset
 - `game1_DS2_labeled.jsonl` - Game 1 evaluation dataset
 - `game2_DS1_labeled.jsonl` - Game 2 training dataset
 - `game2_DS2_labeled.jsonl` - Game 2 evaluation dataset
+- `game1_DS1_features.csv` - Game 1 training features
+- `game1_DS2_features.csv` - Game 1 evaluation features
+- `game2_DS1_features.csv` - Game 2 training features
+- `game2_DS2_features.csv` - Game 2 evaluation features
 - Statistics and metadata files
 
 ---
 
-## 9. Usage Examples
+## 10. Usage Examples
 
 ### As a Library
 ```python
@@ -385,12 +468,11 @@ pipeline = DataPipeline(settings)
 
 # Access configured filenames
 print(f"Game 1 training file: {settings.game1_train}")
-print(f"Pipeline results will be saved to: {settings.pipeline_results}")
 ```
 
 ---
 
-## 10. Course Information
+## 11. Course Information
 
 - **Course**: Mining Media Data II
 - **Semester**: Summer Semester 25
@@ -402,7 +484,7 @@ print(f"Pipeline results will be saved to: {settings.pipeline_results}")
 
 ---
 
-## 11. Key References
+## 12. Key References
 
 - Kim, S., Choi, D., Lee, E., & Rhee, W. (2017). Churn prediction of mobile and online casual games using play log data. _PLoS one_, _12_(7), e0180735.
 - Hadiji, F., Sifa, R., Drachen, A., Thurau, C., Kersting, K., & Bauckhage, C. (2014). Predicting player churn in the wild. In _2014 IEEE conference on computational intelligence and games_ (pp. 1-8). IEEE.

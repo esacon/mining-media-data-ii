@@ -9,11 +9,7 @@ from src.data_processing import DataPipeline
 
 
 def parse_args() -> argparse.Namespace:
-    """Parses command-line arguments for pipeline execution.
-
-    Returns:
-        argparse.Namespace: An object containing the parsed arguments.
-    """
+    """Parses command-line arguments for pipeline execution."""
     parser = argparse.ArgumentParser(description="Run churn prediction data pipeline")
 
     parser.add_argument(
@@ -22,52 +18,50 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Path to a custom config.yaml file. Defaults to project root/config.yaml.",
     )
-
     parser.add_argument(
         "--data-dir",
         type=str,
         default=None,
         help="Override the base data directory from the config file.",
     )
-
     parser.add_argument(
         "--output-dir",
         type=str,
         default=None,
         help="Override the processed data output directory from the config file.",
     )
-
     parser.add_argument(
         "--observation-days",
         type=int,
         default=None,
         help="Override the observation period in days from the config file.",
     )
-
     parser.add_argument(
         "--churn-days",
         type=int,
         default=None,
         help="Override the churn prediction period in days from the config file.",
     )
-
     parser.add_argument(
         "--log-level",
         type=str,
         default=None,
         help="Override the logging level (e.g., 'INFO', 'DEBUG') from the config file.",
     )
-
     parser.add_argument(
         "--prep-only",
         action="store_true",
         help="Run only the data preparation step (conversion and splitting).",
     )
-
     parser.add_argument(
         "--create-only",
         action="store_true",
         help="Run only the dataset creation step (requires data preparation to be completed).",
+    )
+    parser.add_argument(
+        "--features-only",
+        action="store_true",
+        help="Run only the feature extraction step (requires labeled datasets to be created).",
     )
 
     return parser.parse_args()
@@ -92,10 +86,15 @@ def _run_pipeline_step(pipeline, args: argparse.Namespace) -> None:
     if args.prep_only:
         pipeline.logger.info("Running only data preparation step...")
         pipeline.run_preparation()
+
     elif args.create_only:
         pipeline.logger.info("Running only dataset creation step...")
         pipeline.run_dataset_creation()
-        pipeline.print_summary(pipeline.dataset_creator.create_all_datasets())
+
+    elif args.features_only:
+        pipeline.logger.info("Running only feature extraction step...")
+        pipeline.run_feature_extraction()
+
     else:
         pipeline.logger.info("Running full data pipeline...")
         pipeline.run_full_pipeline()

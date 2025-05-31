@@ -1,12 +1,11 @@
 import argparse
-import json
 import sys
 from pathlib import Path
 from typing import Any, Dict
 
 from src.config import get_settings
 from src.data_processing.dataset_creation import DatasetCreator
-from src.utils import format_timestamp, load_json, load_jsonl_sample
+from src.utils import format_timestamp, load_jsonl_sample
 
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -114,40 +113,6 @@ def _analyze_game_files(
             analyze_dataset(file, dataset_creator, detailed=detailed)
 
 
-def _print_pipeline_results(data_dir: Path, settings) -> None:
-    """Print pipeline execution results and configuration if available."""
-    pipeline_results_path = data_dir / settings.pipeline_results
-    if pipeline_results_path.exists():
-        try:
-            results = load_json(pipeline_results_path)
-
-            print("\n" + "=" * 70)
-            if "total_execution_time" in results:
-                print(
-                    f"Total Pipeline Execution Time: {results['total_execution_time']/60:.1f} minutes"
-                )
-
-            config = results.get("configuration", {})
-            print("Pipeline Configuration:")
-            print(
-                f"  - Observation Period: {config.get('observation_days', 'N/A')} days"
-            )
-            print(f"  - Churn Period: {config.get('churn_period_days', 'N/A')} days")
-            print(f"  - Random Seed: {config.get('random_seed', 'N/A')}")
-            print(f"  - Log Level: {config.get('log_level', 'N/A')}")
-            print(f"  - Data Directory: {config.get('data_dir', 'N/A')}")
-            print(f"  - Output Directory: {config.get('output_dir', 'N/A')}")
-
-        except json.JSONDecodeError:
-            print(
-                f"Warning: Could not read {settings.pipeline_results} due to invalid JSON."
-            )
-        except Exception as e:
-            print(
-                f"Warning: An error occurred while reading {settings.pipeline_results}: {e}"
-            )
-
-
 def main() -> None:
     """Main function to parse arguments and orchestrate dataset inspection."""
     parser = _setup_argument_parser()
@@ -175,7 +140,6 @@ def main() -> None:
 
     _analyze_game_files(game1_files, "GAME 1", dataset_creator, args.detailed)
     _analyze_game_files(game2_files, "GAME 2", dataset_creator, args.detailed)
-    _print_pipeline_results(data_dir, settings)
 
 
 if __name__ == "__main__":

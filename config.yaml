@@ -13,35 +13,58 @@ paths:
   processed_dir: "src/data/processed"
   logs_dir: "logs"
   results_dir: "results"
+  features_dir: "results/features"
 
 # File Names Configuration
 filenames:
   # Input files
   game1_csv: "dataset_game1/rawdata_game1.csv"
   game2_jsonl: "dataset_game2/playerLogs_game2_playerbasedlines.jsonl"
-  
+
   # Intermediate files (after conversion and splitting)
   game1_converted: "game1_player_events.jsonl"
   game1_train: "game1_player_events_train.jsonl"
   game1_eval: "game1_player_events_eval.jsonl"
   game2_train: "playerLogs_game2_playerbasedlines_train.jsonl"
   game2_eval: "playerLogs_game2_playerbasedlines_eval.jsonl"
-  
+
   # Final labeled datasets
   game1_ds1: "game1_DS1_labeled.jsonl"
   game1_ds2: "game1_DS2_labeled.jsonl"
   game2_ds1: "game2_DS1_labeled.jsonl"
   game2_ds2: "game2_DS2_labeled.jsonl"
-  
-  # Result files
-  preparation_results: "preparation_results.json"
-  dataset_creation_results: "dataset_creation_results.json"
-  pipeline_results: "pipeline_results.json"
-  
+
+  # Feature files
+  game1_ds1_features: "game1_DS1_features.csv"
+  game1_ds2_features: "game1_DS2_features.csv"
+  game2_ds1_features: "game2_DS1_features.csv"
+  game2_ds2_features: "game2_DS2_features.csv"
+
   # File suffixes
   train_suffix: "_train.jsonl"
   eval_suffix: "_eval.jsonl"
   labeled_suffix: "_labeled.jsonl"
+  features_suffix: "_features.csv"
+
+# Feature Engineering Configuration
+feature_engineering:
+  # Common features (from Kim et al. 2017)
+  common_features:
+    - "playCount"              # Total number of plays in observation period
+    - "bestScore"              # Maximum score achieved
+    - "meanScore"              # Average score
+    - "worstScore"             # Minimum score achieved
+    - "sdScore"                # Standard deviation of scores
+    - "bestScoreIndex"         # Index of best score (normalized)
+    - "bestSubMeanCount"       # (Best - Mean) / Play count
+    - "bestSubMeanRatio"       # (Best - Mean) / Mean
+    - "activeDuration"         # Time between first and last play (hours)
+    - "consecutivePlayRatio"   # Ratio of consecutive plays
+
+  # Game 2 specific features (Kim et al. 2017)
+  game2_specific_features:
+    - "purchaseCount"          # Total number of vehicle purchases
+    - "highestPrice"           # Highest price among purchases
 
 # Logging Configuration
 logging:
@@ -52,4 +75,4 @@ logging:
 # Performance Settings
 performance:
   batch_size: 1000             # Batch size for processing
-  progress_interval: 1000      # Progress logging interval 
+  progress_interval: 1000      # Progress logging interval

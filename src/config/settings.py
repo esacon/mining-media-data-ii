@@ -1,6 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Union
+from typing import List, Optional, Union
 
 import yaml
 
@@ -15,6 +15,7 @@ class Settings:
         processed_dir (Path): Directory for processed data. Defaults to 'src/data/processed'.
         logs_dir (Path): Directory for log files. Defaults to 'logs'.
         results_dir (Path): Directory for storing analysis results. Defaults to 'results'.
+        features_dir (Path): Directory for storing feature extraction results. Defaults to 'results/features'.
         observation_days (int): Number of days for the observation period in data processing.
         churn_period_days (int): Number of days for the churn period in data processing.
         train_ratio (float): Ratio for splitting data into training and evaluation sets.
@@ -29,6 +30,8 @@ class Settings:
         progress_interval (int): Interval for reporting progress during processing.
         max_workers (Optional[int]): Maximum number of worker processes for parallel operations.
                                      None means no limit.
+        common_features (List[str]): List of common features to extract from game data.
+        game2_specific_features (List[str]): List of game 2 specific features.
     """
 
     project_root: Path = Path(__file__).parent.parent.parent
@@ -36,6 +39,7 @@ class Settings:
     processed_dir: Optional[Path] = None
     logs_dir: Optional[Path] = None
     results_dir: Optional[Path] = None
+    features_dir: Optional[Path] = None
 
     observation_days: int = 5
     churn_period_days: int = 10
@@ -59,15 +63,40 @@ class Settings:
     game2_ds1: str = "game2_DS1_labeled.jsonl"
     game2_ds2: str = "game2_DS2_labeled.jsonl"
 
-    # Result files
-    preparation_results: str = "preparation_results.json"
-    dataset_creation_results: str = "dataset_creation_results.json"
-    pipeline_results: str = "pipeline_results.json"
+    # Feature files
+    game1_ds1_features: str = "game1_DS1_features.csv"
+    game1_ds2_features: str = "game1_DS2_features.csv"
+    game2_ds1_features: str = "game2_DS1_features.csv"
+    game2_ds2_features: str = "game2_DS2_features.csv"
 
     # File suffixes
     train_suffix: str = "_train.jsonl"
     eval_suffix: str = "_eval.jsonl"
     labeled_suffix: str = "_labeled.jsonl"
+    features_suffix: str = "_features.csv"
+
+    # Feature engineering configuration
+    common_features: List[str] = field(
+        default_factory=lambda: [
+            "playCount",  # Total number of plays in observation period
+            "bestScore",  # Maximum score achieved
+            "meanScore",  # Average score
+            "worstScore",  # Minimum score achieved
+            "sdScore",  # Standard deviation of scores
+            "bestScoreIndex",  # Index of best score (normalized)
+            "bestSubMeanCount",  # (Best - Mean) / Play count
+            "bestSubMeanRatio",  # (Best - Mean) / Mean
+            "activeDuration",  # Time between first and last play (hours)
+            "consecutivePlayRatio",  # Ratio of consecutive plays
+        ]
+    )
+
+    game2_specific_features: List[str] = field(
+        default_factory=lambda: [
+            "purchaseCount",  # Total number of vehicle purchases
+            "highestPrice",  # Highest price among purchases
+        ]
+    )
 
     log_level: str = "INFO"
     log_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -93,10 +122,13 @@ class Settings:
             self.logs_dir = self.project_root / "logs"
         if self.results_dir is None:
             self.results_dir = self.project_root / "results"
+        if self.features_dir is None:
+            self.features_dir = self.project_root / "results" / "features"
 
         self.processed_dir.mkdir(parents=True, exist_ok=True)
         self.logs_dir.mkdir(parents=True, exist_ok=True)
         self.results_dir.mkdir(parents=True, exist_ok=True)
+        self.features_dir.mkdir(parents=True, exist_ok=True)
 
     def _load_data_processing_config(self, config: dict) -> None:
         """Load data processing configuration from config dict."""
@@ -119,6 +151,8 @@ class Settings:
                 self.logs_dir = self.project_root / paths["logs_dir"]
             if "results_dir" in paths:
                 self.results_dir = self.project_root / paths["results_dir"]
+            if "features_dir" in paths:
+                self.features_dir = self.project_root / paths["features_dir"]
 
     def _load_filenames_config(self, config: dict) -> None:
         """Load filenames configuration from config dict."""
@@ -143,21 +177,36 @@ class Settings:
             self.game2_ds1 = filenames.get("game2_ds1", self.game2_ds1)
             self.game2_ds2 = filenames.get("game2_ds2", self.game2_ds2)
 
-            # Result files
-            self.preparation_results = filenames.get(
-                "preparation_results", self.preparation_results
+            # Feature files
+            self.game1_ds1_features = filenames.get(
+                "game1_ds1_features", self.game1_ds1_features
             )
-            self.dataset_creation_results = filenames.get(
-                "dataset_creation_results", self.dataset_creation_results
+            self.game1_ds2_features = filenames.get(
+                "game1_ds2_features", self.game1_ds2_features
             )
-            self.pipeline_results = filenames.get(
-                "pipeline_results", self.pipeline_results
+            self.game2_ds1_features = filenames.get(
+                "game2_ds1_features", self.game2_ds1_features
+            )
+            self.game2_ds2_features = filenames.get(
+                "game2_ds2_features", self.game2_ds2_features
             )
 
             # File suffixes
             self.train_suffix = filenames.get("train_suffix", self.train_suffix)
             self.eval_suffix = filenames.get("eval_suffix", self.eval_suffix)
             self.labeled_suffix = filenames.get("labeled_suffix", self.labeled_suffix)
+            self.features_suffix = filenames.get(
+                "features_suffix", self.features_suffix
+            )
+
+    def _load_feature_engineering_config(self, config: dict) -> None:
+        """Load feature engineering configuration from config dict."""
+        if "feature_engineering" in config:
+            fe = config["feature_engineering"]
+            if "common_features" in fe:
+                self.common_features = fe["common_features"]
+            if "game2_specific_features" in fe:
+                self.game2_specific_features = fe["game2_specific_features"]
 
     def _load_logging_config(self, config: dict) -> None:
         """Load logging configuration from config dict."""
@@ -204,6 +253,7 @@ class Settings:
             settings._load_data_processing_config(config)
             settings._load_paths_config(config)
             settings._load_filenames_config(config)
+            settings._load_feature_engineering_config(config)
             settings._load_logging_config(config)
             settings._load_performance_config(config)
 

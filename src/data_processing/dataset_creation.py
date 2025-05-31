@@ -11,7 +11,6 @@ from src.utils import (
     ensure_dir,
     get_time_boundaries,
     jsonl_iterator,
-    save_json,
 )
 
 
@@ -177,8 +176,6 @@ class DatasetCreator(LoggerMixin):
             # Create DS2 (evaluation dataset)
             ds2_path = self.create_dataset(files["eval"], f"{game}_DS2")
             results[game]["DS2"] = ds2_path.name
-
-        save_json(results, self.output_dir / self.settings.dataset_creation_results)
 
         self.logger.info("All datasets created successfully!")
         return results
