@@ -1,0 +1,128 @@
+TELEMETRY-BASED CHURN PREDICTION MODEL PERFORMANCE REPORT
+================================================================
+
+Generated: Model Training Pipeline Results
+Reference: Kim et al. (2017) - Churn prediction of mobile and online casual games using play log data
+Primary Evaluation Metric: AUC (Area Under ROC Curve)
+
+================================================================
+EXECUTIVE SUMMARY
+================================================================
+
+Following Kim et al. (2017) methodology, this report evaluates churn prediction models
+primarily using AUC (Area Under ROC Curve) as the performance measure, as it provides
+threshold-independent evaluation suitable for imbalanced datasets common in churn prediction.
+
+Best Performing Models by AUC:
+- Game 1: LogisticRegression (AUC: 0.7920)
+- Game 2: RandomForest (AUC: 0.7338)
+
+================================================================
+GAME GAME1: "DODGE THE MUD" RESULTS
+================================================================
+
+Dataset Statistics:
+- Players: ~1,500 unique devices
+- Features: 10 behavioral features (Kim et al. methodology)
+- Evaluation: DS2 test set (20% holdout)
+
+Model Performance (Ranked by AUC):
+┌─────────────────────┬─────────┬───────────┬────────┬──────────┬─────────┐
+│ Model               │ AUC     │ Accuracy  │ Prec.  │ Recall   │ F1      │
+├─────────────────────┼─────────┼───────────┼────────┼──────────┼─────────┤
+│ LogisticRegression  │ 0.7920  │ 0.8527    │ 0.9677 │ 0.8703   │ 0.9164  │
+│ RandomForest        │ 0.7541  │ 0.9070    │ 0.9551 │ 0.9442   │ 0.9496  │
+│ DecisionTree        │ 0.7318  │ 0.6961    │ 0.9734 │ 0.6915   │ 0.8086  │
+└─────────────────────┴─────────┴───────────┴────────┴──────────┴─────────┘
+
+Key Insights:
+✓ LogisticRegression achieves best AUC (0.7920) - optimal discriminative performance
+✓ All models show high precision (>95%) - reliable churn predictions
+✓ Most important feature across all models: activeDuration
+
+================================================================
+GAME GAME2: "RACING GAME WITH PURCHASES" RESULTS
+================================================================
+
+Dataset Statistics:
+- Players: ~27,000 unique players
+- Features: 12 behavioral + purchase features (Kim et al. methodology)
+- Evaluation: DS2 test set (20% holdout)
+
+Model Performance (Ranked by AUC):
+┌─────────────────────┬─────────┬───────────┬────────┬──────────┬─────────┐
+│ Model               │ AUC     │ Accuracy  │ Prec.  │ Recall   │ F1      │
+├─────────────────────┼─────────┼───────────┼────────┼──────────┼─────────┤
+│ RandomForest        │ 0.7338  │ 0.7487    │ 0.8378 │ 0.8253   │ 0.8315  │
+│ LogisticRegression  │ 0.7317  │ 0.6945    │ 0.8550 │ 0.7147   │ 0.7786  │
+│ DecisionTree        │ 0.7009  │ 0.6001    │ 0.8782 │ 0.5431   │ 0.6711  │
+└─────────────────────┴─────────┴───────────┴────────┴──────────┴─────────┘
+
+Key Insights:
+✓ RandomForest achieves best AUC (0.7338) - optimal discriminative performance
+✓ More challenging dataset with lower overall AUC scores compared to Game 1
+✓ Purchase features provide moderate additional predictive value
+✓ Most important features: activeDuration, consecutivePlayRatio, purchaseCount
+
+================================================================
+OVERALL MODEL RANKING (BY AUC - PRIMARY METRIC)
+================================================================
+
+Following Kim et al. (2017) emphasis on AUC as the primary evaluation metric:
+
+Rank | Model               | Game   | AUC    | Accuracy | F1-Score
+-----|---------------------|--------|--------|----------|----------
+1    | LogisticRegression  | game1  | 0.7920 | 0.8527   | 0.9164
+2    | RandomForest        | game1  | 0.7541 | 0.9070   | 0.9496
+3    | RandomForest        | game2  | 0.7338 | 0.7487   | 0.8315
+4    | DecisionTree        | game1  | 0.7318 | 0.6961   | 0.8086
+5    | LogisticRegression  | game2  | 0.7317 | 0.6945   | 0.7786
+6    | DecisionTree        | game2  | 0.7009 | 0.6001   | 0.6711
+
+🏆 BEST OVERALL MODEL: LogisticRegression on game1 (AUC: 0.7920)
+
+================================================================
+FEATURE IMPORTANCE ANALYSIS
+================================================================
+
+Game 1 - Top Predictive Features:
+1. activeDuration - Average importance: 0.3600
+2. meanScore - Average importance: 0.2799
+3. worstScore - Average importance: 0.2297
+4. consecutivePlayRatio - Average importance: 0.2063
+5. playCount - Average importance: 0.1417
+
+Game 2 - Top Predictive Features:
+1. consecutivePlayRatio - Average importance: 0.4009
+2. activeDuration - Average importance: 0.3174
+3. playCount - Average importance: 0.1060
+4. worstScore - Average importance: 0.1032
+5. purchaseCount - Average importance: 0.0757
+
+================================================================
+RECOMMENDATIONS
+================================================================
+
+Production Deployment:
+- Game 1: Use LogisticRegression (AUC: 0.7920) for optimal discriminative performance
+- Game 2: Use RandomForest (AUC: 0.7338) for best threshold-independent churn prediction
+
+Model Selection Rationale (Kim et al. 2017 Approach):
+✓ AUC provides threshold-independent evaluation
+✓ Suitable for imbalanced churn datasets
+✓ Better reflects model's discriminative ability than accuracy alone
+
+================================================================
+REFERENCE
+================================================================
+
+Kim, S., Choi, D., Lee, E., & Rhee, W. (2017). Churn prediction of mobile and
+online casual games using play log data. PLoS one, 12(7), e0180735.
+
+Key Methodological Alignment:
+- Primary evaluation metric: AUC (Area Under ROC Curve)
+- Behavioral feature extraction from player logs
+- Threshold-independent model evaluation
+- Focus on discriminative ability over accuracy in imbalanced datasets
+
+================================================================

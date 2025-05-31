@@ -11,7 +11,7 @@ from src.models.decision_tree_classifier import DecisionTreeClassifier
 from src.models.logistic_regression_classifier import LogisticRegressionClassifier
 from src.models.model_config import ModelConfigManager
 from src.models.random_forest_classifier import RandomForestClassifier
-from src.utils import LoggerMixin, save_json
+from src.utils import LoggerMixin, generate_performance_report, save_json
 
 
 class ModelPipeline(LoggerMixin):
@@ -619,6 +619,7 @@ class ModelPipeline(LoggerMixin):
         """
         Displays overall comparison of best performing models across all games.
         Uses cached `self.all_game_metrics`.
+        Following Kim et al. (2017), ranks primarily by AUC (ROC-AUC).
         """
         self._print_header("OVERALL MODEL PERFORMANCE COMPARISON")
 
@@ -642,7 +643,7 @@ class ModelPipeline(LoggerMixin):
             print("No valid results to compare.")
             return
 
-        metrics_to_check = ["accuracy", "precision", "recall", "f1_score", "roc_auc"]
+        metrics_to_check = ["roc_auc", "accuracy", "precision", "recall", "f1_score"]
 
         print("Best Performing Models by Metric:")
         print("-" * 60)
@@ -658,35 +659,58 @@ class ModelPipeline(LoggerMixin):
                 print(f"{metric.upper():>10}: No valid data")
 
         print(f"\n{'='*60}")
-        print("OVERALL RANKING BY F1-SCORE:")
+        print("OVERALL RANKING BY ROC-AUC (PRIMARY METRIC - Kim et al. 2017):")
         print(f"{'='*60}")
 
-        f1_results = [r for r in all_results if not pd.isna(r["f1_score"])]
-        if f1_results:
-            f1_results.sort(key=lambda x: x["f1_score"], reverse=True)
+        # Rank by AUC
+        auc_results = [r for r in all_results if not pd.isna(r["roc_auc"])]
+        if auc_results:
+            auc_results.sort(key=lambda x: x["roc_auc"], reverse=True)
 
             print(
-                f"{'Rank':<6}{'Model':<18}{'Game':<8}{'F1-Score':<10}{'Accuracy':<10}{'ROC AUC':<10}"
+                f"{'Rank':<6}{'Model':<18}{'Game':<8}{'ROC-AUC':<10}{'Accuracy':<10}{'F1-Score':<10}"
             )
             print("-" * 62)
 
-            for i, result in enumerate(f1_results, 1):
+            for i, result in enumerate(auc_results, 1):
                 print(
-                    f"{i:<6}{result['model']:<18}{result['game']:<8}{result['f1_score']:<10.4f}"
-                    f"{result['accuracy']:<10.4f}{result['roc_auc']:<10.4f}"
+                    f"{i:<6}{result['model']:<18}{result['game']:<8}{result['roc_auc']:<10.4f}"
+                    f"{result['accuracy']:<10.4f}{result['f1_score']:<10.4f}"
                 )
 
-            best_overall = f1_results[0]
+            best_overall = auc_results[0]
             self.logger.info(
-                f"BEST OVERALL MODEL: {best_overall['model']} on {best_overall['game']} (F1-Score: {best_overall['f1_score']:.4f})"
+                f"BEST OVERALL MODEL (by AUC): {best_overall['model']} on {best_overall['game']} (ROC-AUC: {best_overall['roc_auc']:.4f})"
             )
             print(
-                f"\n🏆 BEST OVERALL MODEL: {best_overall['model']} on {best_overall['game']} "
-                f"(F1-Score: {best_overall['f1_score']:.4f})"
+                f"\n🏆 BEST OVERALL MODEL (by AUC): {best_overall['model']} on {best_overall['game']} "
+                f"(ROC-AUC: {best_overall['roc_auc']:.4f})"
             )
         else:
-            self.logger.info("No valid F1-scores available for ranking.")
-            print("No valid F1-scores available for ranking.")
+            self.logger.info("No valid AUC scores available for ranking.")
+            print("No valid AUC scores available for ranking.")
+
+    def _save_performance_report(self) -> None:
+        """
+        Saves a comprehensive performance report to a text file.
+        """
+        try:
+            report_path = self.results_dir / "model_performance_report.txt"
+
+            # Generate the report content using utility function
+            report_content = generate_performance_report(
+                self.all_game_metrics, self.all_feature_importance
+            )
+
+            # Write the report to file
+            with open(report_path, "w", encoding="utf-8") as f:
+                f.write(report_content)
+
+            self.logger.info(f"Performance report saved to: {report_path}")
+            print(f"📄 Performance report saved: {report_path}")
+        except Exception as e:
+            self.logger.error(f"Error saving performance report: {e}")
+            print(f"Error saving performance report: {e}")
 
     def _process_single_game(self, game_id: str) -> None:
         """
@@ -1027,6 +1051,7 @@ class ModelPipeline(LoggerMixin):
 
         self._save_results()
         self._display_overall_best_models()
+        self._save_performance_report()
 
         self._print_header("PIPELINE FINISHED")
         self.logger.info("Model training and evaluation pipeline finished.")
