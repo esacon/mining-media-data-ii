@@ -30,13 +30,17 @@ class FeatureExtractor(LoggerMixin):
         self.processed_dir = settings.processed_dir
         self.observation_days = settings.observation_days
 
-    def _get_empty_common_features(self) -> Dict[str, Any]:
-        """Returns a dictionary of common features initialized with zero/default values.
+    def _get_path(self, file_path: Union[str, Path]) -> Path:
+        """Get full path for files."""
+        return (
+            self.processed_dir / file_path
+            if not Path(file_path).is_absolute()
+            else Path(file_path)
+        )
 
-        Returns:
-            Dict[str, Any]: A dictionary of common features initialized with zero/default values.
-        """
-        return {
+    def _get_empty_features(self, game_name: str = "game1") -> Dict[str, Any]:
+        """Returns empty feature set with appropriate defaults."""
+        features = {
             "playCount": 0,
             "bestScore": 0,
             "meanScore": 0.0,
@@ -48,20 +52,14 @@ class FeatureExtractor(LoggerMixin):
             "activeDuration": 0.0,
             "consecutivePlayRatio": 0.0,
         }
+        if game_name == "game2":
+            features.update({"purchaseCount": 0, "highestPrice": 0.0})
+        return features
 
     def _extract_game_events(
         self, records: List[Dict], game_name: str
     ) -> Dict[str, Any]:
-        """
-        Extracts relevant play events, scores, and timestamps based on the game type.
-
-        Args:
-            records (List[Dict]): A list of dictionaries containing game events.
-            game_name (str): The name of the game.
-
-        Returns:
-            Dict[str, Any]: A dictionary containing the extracted events, scores, and timestamps.
-        """
+        """Extract relevant events, scores, and timestamps based on game type."""
         if game_name == "game1":
             play_events = [r for r in records if r.get("event") == "play"]
             scores = [
@@ -79,9 +77,11 @@ class FeatureExtractor(LoggerMixin):
             progress_events = [
                 r
                 for r in records
-                if r.get("event") == "progress"
-                and r.get("properties", {}).get("action") == "complete"
-                and r.get("properties", {}).get("type") == "race"
+                if (
+                    r.get("event") == "progress"
+                    and r.get("properties", {}).get("action") == "complete"
+                    and r.get("properties", {}).get("type") == "race"
+                )
             ]
             scores = [
                 event["properties"]["reward"]
@@ -94,20 +94,13 @@ class FeatureExtractor(LoggerMixin):
                 "scores": scores,
                 "timestamps": timestamps,
             }
-        return {"valid_events": [], "scores": [], "timestamps": []}
+        else:
+            return {"valid_events": [], "scores": [], "timestamps": []}
 
-    def _calculate_kim_score_features(
+    def _calculate_score_features(
         self, scores: List[Union[int, float]]
     ) -> Dict[str, Any]:
-        """
-        Calculates score-based features as described in Kim et al. (2017).
-
-        Args:
-            scores (List[Union[int, float]]): A list of scores.
-
-        Returns:
-            Dict[str, Any]: A dictionary containing the calculated score-based features.
-        """
+        """Calculate score-based features from Kim et al. (2017)."""
         if not scores:
             return {
                 "bestScore": 0,
@@ -141,61 +134,32 @@ class FeatureExtractor(LoggerMixin):
             "bestSubMeanRatio": best_sub_mean_ratio,
         }
 
-    def _calculate_consecutive_play_ratio(self, datetimes: List[datetime]) -> float:
-        """
-        Calculates the consecutive play ratio based on Kim et al. (2017),
-        using a 30-minute threshold.
-
-        Args:
-            datetimes (List[datetime]): A list of datetimes.
-
-        Returns:
-            float: The consecutive play ratio.
-        """
-        if len(datetimes) < 2:
-            return 0.0
-
-        consecutive_threshold = 30 * 60
-        consecutive_count = 0
-
-        for i in range(1, len(datetimes)):
-            time_diff = (datetimes[i] - datetimes[i - 1]).total_seconds()
-            if time_diff <= consecutive_threshold:
-                consecutive_count += 1
-
-        total_adjacent_pairs = len(datetimes) - 1
-        return (
-            consecutive_count / total_adjacent_pairs
-            if total_adjacent_pairs > 0
-            else 0.0
-        )
-
-    def _calculate_kim_temporal_features(
-        self, datetimes: List[datetime]
-    ) -> Dict[str, Any]:
-        """
-        Calculates temporal features as described in Kim et al. (2017).
-
-        Args:
-            datetimes (List[datetime]): A list of datetimes.
-
-        Returns:
-            Dict[str, Any]: A dictionary containing the calculated temporal features.
-        """
+    def _calculate_temporal_features(self, datetimes: List[datetime]) -> Dict[str, Any]:
+        """Calculate temporal features from Kim et al. (2017)."""
         if len(datetimes) < 1:
             return {"activeDuration": 0.0, "consecutivePlayRatio": 0.0}
 
+        # Active duration
         active_duration = 0.0
         if len(datetimes) > 1:
-            first_play = datetimes[0]
-            last_play = datetimes[-1]
-            active_duration = (last_play - first_play).total_seconds() / 3600.0
+            active_duration = (datetimes[-1] - datetimes[0]).total_seconds() / 3600.0
 
-        consecutive_play_ratio = self._calculate_consecutive_play_ratio(datetimes)
+        # Consecutive play ratio (30-minute threshold)
+        consecutive_count = 0
+        if len(datetimes) >= 2:
+            consecutive_threshold = 30 * 60
+            for i in range(1, len(datetimes)):
+                time_diff = (datetimes[i] - datetimes[i - 1]).total_seconds()
+                if time_diff <= consecutive_threshold:
+                    consecutive_count += 1
+
+        consecutive_ratio = (
+            consecutive_count / (len(datetimes) - 1) if len(datetimes) > 1 else 0.0
+        )
 
         return {
             "activeDuration": active_duration,
-            "consecutivePlayRatio": consecutive_play_ratio,
+            "consecutivePlayRatio": consecutive_ratio,
         }
 
     def extract_common_features(
@@ -213,17 +177,17 @@ class FeatureExtractor(LoggerMixin):
             Dict[str, Any]: A dictionary containing the extracted features.
         """
         if not all_records:
-            return self._get_empty_common_features()
+            return self._get_empty_features(game_name)
 
         try:
             sorted_records = sorted(all_records, key=lambda x: x.get("time", 0))
             if not sorted_records:
-                return self._get_empty_common_features()
+                return self._get_empty_features(game_name)
 
             first_play_timestamp = sorted_records[0].get("time")
             if first_play_timestamp is None:
                 self.logger.warning("First play timestamp not found in records.")
-                return self._get_empty_common_features()
+                return self._get_empty_features(game_name)
 
             first_play_datetime = convert_timestamp(first_play_timestamp, "datetime")
             observation_end_datetime = first_play_datetime + timedelta(
@@ -238,11 +202,11 @@ class FeatureExtractor(LoggerMixin):
             ]
 
             if not observation_records:
-                return self._get_empty_common_features()
+                return self._get_empty_features(game_name)
 
             events_data = self._extract_game_events(observation_records, game_name)
             if not events_data["valid_events"]:
-                return self._get_empty_common_features()
+                return self._get_empty_features(game_name)
 
             scores = events_data["scores"]
             timestamps = events_data["timestamps"]
@@ -252,13 +216,13 @@ class FeatureExtractor(LoggerMixin):
 
             features = {
                 "playCount": play_count,
-                **self._calculate_kim_score_features(scores),
-                **self._calculate_kim_temporal_features(datetimes),
+                **self._calculate_score_features(scores),
+                **self._calculate_temporal_features(datetimes),
             }
             return features
         except Exception as e:
             self.logger.warning(f"Error extracting common features: {e}")
-            return self._get_empty_common_features()
+            return self._get_empty_features(game_name)
 
     def extract_game2_specific_features(
         self, observation_records: List[Dict]
@@ -302,7 +266,43 @@ class FeatureExtractor(LoggerMixin):
             self.logger.warning(f"Error extracting Game 2 features: {e}")
             return {"purchaseCount": 0, "highestPrice": 0.0}
 
-    def _validate_features(self, df: pd.DataFrame, game_name: str) -> None:
+    def _process_single_player(
+        self, player_data: Dict, game_name: str
+    ) -> Union[Dict[str, Any], None]:
+        """Process a single player's data to extract features.
+
+        Args:
+            player_data (Dict): A dictionary containing the player's data.
+            game_name (str): The name of the game.
+
+        Returns:
+            Union[Dict[str, Any], None]: A dictionary containing the extracted features or None if an error occurs.
+        """
+        try:
+            player_id = player_data.get("player_id")
+            churned = player_data.get("churned", False)
+            all_records = player_data.get("observation_records", [])
+
+            if not player_id or not isinstance(all_records, list):
+                return None
+
+            feature_row = {
+                "player_id": player_id,
+                "churned": int(churned),
+                **self.extract_common_features(all_records, game_name),
+            }
+
+            if game_name == "game2":
+                feature_row.update(self.extract_game2_specific_features(all_records))
+
+            return feature_row
+        except Exception as e:
+            self.logger.warning(f"Error processing player: {e}")
+            return None
+
+    def _validate_and_clean_features(
+        self, df: pd.DataFrame, game_name: str
+    ) -> pd.DataFrame:
         """
         Validates extracted features for data quality, checking for missing columns
         and infinite/NaN values.
@@ -312,7 +312,7 @@ class FeatureExtractor(LoggerMixin):
             game_name (str): The name of the game.
 
         Returns:
-            None
+            pd.DataFrame: A pandas dataframe containing the validated features.
         """
         required_cols = ["player_id", "churned", "playCount"]
         missing_cols = [col for col in required_cols if col not in df.columns]
@@ -340,73 +340,10 @@ class FeatureExtractor(LoggerMixin):
         expected_features = 10 + (2 if game_name == "game2" else 0)
 
         self.logger.info(
-            f"Feature validation: {len(df)} players, "
-            f"{feature_count} features (expected: {expected_features}), "
-            f"{churn_rate:.1%} churn rate"
+            f"Validated: {len(df)} players, {feature_count} features "
+            f"(expected: {expected_features}), {churn_rate:.1%} churn rate"
         )
-
-    def _process_single_player(
-        self, player_data: Dict, line_num: int, game_name: str
-    ) -> Union[Dict[str, Any], None]:
-        """
-        Processes a single player's data to extract features.
-
-        Args:
-            player_data (Dict): The player data dictionary.
-            line_num (int): The line number for error reporting.
-            game_name (str): The name of the game.
-
-        Returns:
-            Union[Dict[str, Any], None]: The extracted features or None if processing failed.
-        """
-        try:
-            player_id = player_data.get("player_id")
-            churned = player_data.get("churned", False)
-            all_records = player_data.get("observation_records", [])
-
-            if not player_id or not isinstance(all_records, list):
-                self.logger.warning(
-                    f"Skipping invalid player data at line {line_num + 1}"
-                )
-                return None
-
-            feature_row = {
-                "player_id": player_id,
-                "churned": int(churned),
-                **self.extract_common_features(all_records, game_name),
-            }
-
-            if game_name == "game2":
-                feature_row.update(self.extract_game2_specific_features(all_records))
-
-            return feature_row
-
-        except Exception as e:
-            self.logger.warning(f"Error processing player at line {line_num + 1}: {e}")
-            return None
-
-    def _should_report_progress(self, line_num: int) -> bool:
-        """
-        Determines if progress should be reported for the current line.
-
-        Args:
-            line_num (int): The current line number (0-indexed).
-
-        Returns:
-            bool: True if progress should be reported.
-        """
-        return (line_num + 1) % self.settings.progress_interval == 0
-
-    def _report_progress(self, line_num: int, total_lines: int) -> None:
-        """
-        Reports processing progress.
-
-        Args:
-            line_num (int): The current line number (0-indexed).
-            total_lines (int): The total number of lines.
-        """
-        progress_pct = ((line_num + 1) / total_lines * 100) if total_lines > 0 else 0
-        self.logger.info(f"Processed {line_num + 1:,} players ({progress_pct:.1f}%)...")
+        return df
 
     def extract_features_from_dataset(
         self, dataset_file: Union[str, Path], game_name: str
@@ -421,11 +358,7 @@ class FeatureExtractor(LoggerMixin):
         Returns:
             pd.DataFrame: A pandas dataframe containing the extracted features.
         """
-        dataset_path = (
-            Path(dataset_file)
-            if Path(dataset_file).is_absolute()
-            else self.processed_dir / dataset_file
-        )
+        dataset_path = self._get_path(dataset_file)
 
         if not dataset_path.exists():
             raise FileNotFoundError(f"Dataset file not found: {dataset_path}")
@@ -439,10 +372,13 @@ class FeatureExtractor(LoggerMixin):
         errors_count = 0
 
         for line_num, player_data in enumerate(jsonl_iterator(dataset_path)):
-            if self._should_report_progress(line_num):
-                self._report_progress(line_num, total_lines)
+            if (line_num + 1) % self.settings.progress_interval == 0:
+                progress = (line_num + 1) / total_lines * 100 if total_lines > 0 else 0
+                self.logger.info(
+                    f"Processed {line_num + 1:,} players ({progress:.1f}%)..."
+                )
 
-            feature_row = self._process_single_player(player_data, line_num, game_name)
+            feature_row = self._process_single_player(player_data, game_name)
 
             if feature_row is None:
                 errors_count += 1
@@ -465,8 +401,7 @@ class FeatureExtractor(LoggerMixin):
         if df.empty:
             raise ValueError("No features extracted - check input data format")
 
-        self._validate_features(df, game_name)
-        return df
+        return self._validate_and_clean_features(df, game_name)
 
     def extract_all_features(self) -> None:
         """
@@ -480,33 +415,37 @@ class FeatureExtractor(LoggerMixin):
         self.logger.info("Starting feature extraction for all datasets...")
         extraction_start_time = time.time()
 
-        datasets = {
-            "game1_DS1": (
+        datasets = [
+            (
                 self.settings.game1_ds1,
                 "game1",
                 self.settings.game1_ds1_features,
+                "game1_DS1",
             ),
-            "game1_DS2": (
+            (
                 self.settings.game1_ds2,
                 "game1",
                 self.settings.game1_ds2_features,
+                "game1_DS2",
             ),
-            "game2_DS1": (
+            (
                 self.settings.game2_ds1,
                 "game2",
                 self.settings.game2_ds1_features,
+                "game2_DS1",
             ),
-            "game2_DS2": (
+            (
                 self.settings.game2_ds2,
                 "game2",
                 self.settings.game2_ds2_features,
+                "game2_DS2",
             ),
-        }
+        ]
 
         successful_extractions = 0
         failed_extractions = 0
 
-        for dataset_name, (input_file, game_name, output_file) in datasets.items():
+        for input_file, game_name, output_file, dataset_name in datasets:
             dataset_start_time = time.time()
             input_path = self.processed_dir / input_file
 

@@ -108,12 +108,12 @@ class Settings:
     max_workers: Optional[int] = None
 
     def __post_init__(self) -> None:
-        """Initializes default paths and ensures that necessary directories exist.
+        """Initialize default paths and create directories."""
+        self._set_default_paths()
+        self._create_directories()
 
-        This method is automatically called after the dataclass is initialized.
-        It sets default values for directory paths if they are not explicitly provided
-        and then creates these directories if they do not already exist.
-        """
+    def _set_default_paths(self) -> None:
+        """Set default paths if not explicitly provided."""
         if self.data_dir is None:
             self.data_dir = self.project_root / "src" / "data"
         if self.processed_dir is None:
@@ -125,120 +125,96 @@ class Settings:
         if self.features_dir is None:
             self.features_dir = self.project_root / "results" / "features"
 
-        self.processed_dir.mkdir(parents=True, exist_ok=True)
-        self.logs_dir.mkdir(parents=True, exist_ok=True)
-        self.results_dir.mkdir(parents=True, exist_ok=True)
-        self.features_dir.mkdir(parents=True, exist_ok=True)
+    def _create_directories(self) -> None:
+        """Create necessary directories."""
+        for directory in [
+            self.processed_dir,
+            self.logs_dir,
+            self.results_dir,
+            self.features_dir,
+        ]:
+            directory.mkdir(parents=True, exist_ok=True)
 
-    def _load_data_processing_config(self, config: dict) -> None:
-        """Load data processing configuration from config dict."""
-        if "data_processing" in config:
-            dp = config["data_processing"]
-            self.observation_days = dp.get("observation_days", self.observation_days)
-            self.churn_period_days = dp.get("churn_period_days", self.churn_period_days)
-            self.train_ratio = dp.get("train_ratio", self.train_ratio)
-            self.random_seed = dp.get("random_seed", self.random_seed)
+    def _load_config_section(self, config: dict, section: str, mappings: dict) -> None:
+        """Load configuration section with field mappings."""
+        if section not in config:
+            return
 
-    def _load_paths_config(self, config: dict) -> None:
-        """Load paths configuration from config dict."""
-        if "paths" in config:
-            paths = config["paths"]
-            if "data_dir" in paths:
-                self.data_dir = self.project_root / paths["data_dir"]
-            if "processed_dir" in paths:
-                self.processed_dir = self.project_root / paths["processed_dir"]
-            if "logs_dir" in paths:
-                self.logs_dir = self.project_root / paths["logs_dir"]
-            if "results_dir" in paths:
-                self.results_dir = self.project_root / paths["results_dir"]
-            if "features_dir" in paths:
-                self.features_dir = self.project_root / paths["features_dir"]
+        section_config = config[section]
+        for config_key, attr_name in mappings.items():
+            if config_key in section_config:
+                value = section_config[config_key]
+                # Handle path conversions
+                if attr_name.endswith("_dir") and isinstance(value, str):
+                    value = self.project_root / value
+                setattr(self, attr_name, value)
 
-    def _load_filenames_config(self, config: dict) -> None:
-        """Load filenames configuration from config dict."""
-        if "filenames" in config:
-            filenames = config["filenames"]
-            # Input files
-            self.game1_csv = filenames.get("game1_csv", self.game1_csv)
-            self.game2_jsonl = filenames.get("game2_jsonl", self.game2_jsonl)
+    def _load_from_config(self, config: dict) -> None:
+        """Load all configuration sections."""
+        # Define all configuration mappings
+        config_mappings = {
+            "data_processing": {
+                "observation_days": "observation_days",
+                "churn_period_days": "churn_period_days",
+                "train_ratio": "train_ratio",
+                "random_seed": "random_seed",
+            },
+            "paths": {
+                "data_dir": "data_dir",
+                "processed_dir": "processed_dir",
+                "logs_dir": "logs_dir",
+                "results_dir": "results_dir",
+                "features_dir": "features_dir",
+            },
+            "filenames": {
+                # Input files
+                "game1_csv": "game1_csv",
+                "game2_jsonl": "game2_jsonl",
+                # Intermediate files
+                "game1_converted": "game1_converted",
+                "game1_train": "game1_train",
+                "game1_eval": "game1_eval",
+                "game2_train": "game2_train",
+                "game2_eval": "game2_eval",
+                # Labeled datasets
+                "game1_ds1": "game1_ds1",
+                "game1_ds2": "game1_ds2",
+                "game2_ds1": "game2_ds1",
+                "game2_ds2": "game2_ds2",
+                # Feature files
+                "game1_ds1_features": "game1_ds1_features",
+                "game1_ds2_features": "game1_ds2_features",
+                "game2_ds1_features": "game2_ds1_features",
+                "game2_ds2_features": "game2_ds2_features",
+                # Suffixes
+                "train_suffix": "train_suffix",
+                "eval_suffix": "eval_suffix",
+                "labeled_suffix": "labeled_suffix",
+                "features_suffix": "features_suffix",
+            },
+            "feature_engineering": {
+                "common_features": "common_features",
+                "game2_specific_features": "game2_specific_features",
+            },
+            "logging": {
+                "level": "log_level",
+                "console": "log_to_console",
+                "file": "log_to_file",
+            },
+            "performance": {
+                "batch_size": "batch_size",
+                "progress_interval": "progress_interval",
+                "max_workers": "max_workers",
+            },
+        }
 
-            # Intermediate files
-            self.game1_converted = filenames.get(
-                "game1_converted", self.game1_converted
-            )
-            self.game1_train = filenames.get("game1_train", self.game1_train)
-            self.game1_eval = filenames.get("game1_eval", self.game1_eval)
-            self.game2_train = filenames.get("game2_train", self.game2_train)
-            self.game2_eval = filenames.get("game2_eval", self.game2_eval)
-
-            # Final labeled datasets
-            self.game1_ds1 = filenames.get("game1_ds1", self.game1_ds1)
-            self.game1_ds2 = filenames.get("game1_ds2", self.game1_ds2)
-            self.game2_ds1 = filenames.get("game2_ds1", self.game2_ds1)
-            self.game2_ds2 = filenames.get("game2_ds2", self.game2_ds2)
-
-            # Feature files
-            self.game1_ds1_features = filenames.get(
-                "game1_ds1_features", self.game1_ds1_features
-            )
-            self.game1_ds2_features = filenames.get(
-                "game1_ds2_features", self.game1_ds2_features
-            )
-            self.game2_ds1_features = filenames.get(
-                "game2_ds1_features", self.game2_ds1_features
-            )
-            self.game2_ds2_features = filenames.get(
-                "game2_ds2_features", self.game2_ds2_features
-            )
-
-            # File suffixes
-            self.train_suffix = filenames.get("train_suffix", self.train_suffix)
-            self.eval_suffix = filenames.get("eval_suffix", self.eval_suffix)
-            self.labeled_suffix = filenames.get("labeled_suffix", self.labeled_suffix)
-            self.features_suffix = filenames.get(
-                "features_suffix", self.features_suffix
-            )
-
-    def _load_feature_engineering_config(self, config: dict) -> None:
-        """Load feature engineering configuration from config dict."""
-        if "feature_engineering" in config:
-            fe = config["feature_engineering"]
-            if "common_features" in fe:
-                self.common_features = fe["common_features"]
-            if "game2_specific_features" in fe:
-                self.game2_specific_features = fe["game2_specific_features"]
-
-    def _load_logging_config(self, config: dict) -> None:
-        """Load logging configuration from config dict."""
-        if "logging" in config:
-            log = config["logging"]
-            self.log_level = log.get("level", self.log_level)
-            self.log_to_console = log.get("console", self.log_to_console)
-            self.log_to_file = log.get("file", self.log_to_file)
-
-    def _load_performance_config(self, config: dict) -> None:
-        """Load performance configuration from config dict."""
-        if "performance" in config:
-            perf = config["performance"]
-            self.batch_size = perf.get("batch_size", self.batch_size)
-            self.progress_interval = perf.get(
-                "progress_interval", self.progress_interval
-            )
-            self.max_workers = perf.get("max_workers", self.max_workers)
+        # Load each section
+        for section, mappings in config_mappings.items():
+            self._load_config_section(config, section, mappings)
 
     @classmethod
     def from_yaml(cls, config_path: Optional[Union[str, Path]] = None) -> "Settings":
-        """Creates a Settings instance by loading configuration from a YAML file.
-
-        If no configuration path is provided, it defaults to 'config.yaml' in the
-        project root. Settings from the YAML file will override default values.
-
-        Args:
-            config_path (Optional[Union[str, Path]]): The path to the YAML configuration file.
-
-        Returns:
-            Settings: A configured Settings instance.
-        """
+        """Create Settings instance from YAML configuration."""
         if config_path is None:
             config_path = Path(__file__).parent.parent.parent / "config.yaml"
         else:
@@ -249,34 +225,18 @@ class Settings:
         if config_path.exists():
             with open(config_path, "r") as f:
                 config = yaml.safe_load(f)
-
-            settings._load_data_processing_config(config)
-            settings._load_paths_config(config)
-            settings._load_filenames_config(config)
-            settings._load_feature_engineering_config(config)
-            settings._load_logging_config(config)
-            settings._load_performance_config(config)
+            settings._load_from_config(config)
 
         settings.__post_init__()
         return settings
 
 
+# Global settings management
 _settings: Optional[Settings] = None
 
 
 def get_settings(config_path: Optional[Union[str, Path]] = None) -> Settings:
-    """Retrieves the global Settings instance.
-
-    If the settings have not been loaded yet, they will be loaded from the
-    specified config path or the default 'config.yaml'. This ensures a
-    singleton-like behavior for the project settings.
-
-    Args:
-        config_path (Optional[Union[str, Path]]): Path to the YAML configuration file.
-
-    Returns:
-        Settings: The global Settings instance.
-    """
+    """Get global Settings instance."""
     global _settings
     if _settings is None:
         _settings = Settings.from_yaml(config_path)
@@ -284,17 +244,7 @@ def get_settings(config_path: Optional[Union[str, Path]] = None) -> Settings:
 
 
 def reload_settings(config_path: Optional[Union[str, Path]] = None) -> Settings:
-    """Reloads the global Settings instance from a configuration file.
-
-    This function forces the settings to be reloaded, discarding any
-    previously loaded configuration.
-
-    Args:
-        config_path (Optional[Union[str, Path]]): Path to the YAML configuration file.
-
-    Returns:
-        Settings: The reloaded global Settings instance.
-    """
+    """Reload global Settings instance."""
     global _settings
     _settings = Settings.from_yaml(config_path)
     return _settings
