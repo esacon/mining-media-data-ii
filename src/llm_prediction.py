@@ -14,6 +14,9 @@ from sklearn.metrics import (
 from tqdm import tqdm
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
+# from pathlib import Path
+
+
 # some available models with their descriptions
 AVAILABLE_MODELS = {
     "distilbert": {
@@ -68,6 +71,7 @@ def load_dataset(game_number, dataset_type):
             f"Error: Could not decode JSON from file {filename}. Ensure it's a valid JSONL file."
         )
         raise
+
 
 
 def create_prompt(player_data, game_number):
@@ -289,6 +293,7 @@ def main():
             print(f"Metrics saved to {output_file}")
         except IOError:
             print(f"Error: Could not write metrics to {output_file}")
+
 
 
 if __name__ == "__main__":

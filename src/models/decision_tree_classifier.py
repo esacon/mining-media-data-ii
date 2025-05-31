@@ -52,6 +52,8 @@ class DecisionTreeClassifier(BaseClassifier):
     def train(self, X_train: pd.DataFrame, y_train: pd.Series) -> None:
         """
         Trains the Decision Tree model.
+        Scikit-learn's fit method, when given a pandas DataFrame, will store
+        feature names in `self.model.feature_names_in_`.
 
         Args:
             X_train (pd.DataFrame): Training features.
@@ -71,13 +73,54 @@ class DecisionTreeClassifier(BaseClassifier):
             )
 
         except Exception as e:
-            self.logger.error(f"Error training Decision Tree model: {e}")
-            self.is_fitted_ = False
-            raise RuntimeError(f"Model training failed: {e}") from e
+            if self.logger:
+                self.logger.error(
+                    f"Error training Decision Tree model: {e}", exc_info=True
+                )
+            else:
+                print(f"Error training Decision Tree model: {e}")
+            raise
+
+    def _prepare_features(self, X):
+        """Helper method to prepare features for prediction."""
+        if isinstance(X, pd.DataFrame):
+            return X.values
+        return X
+
+    def _validate_input(self, X):
+        """Helper method to validate input data."""
+        if X is None:
+            raise ValueError("Input data cannot be None")
+        if len(X.shape) != 2:
+            raise ValueError("Input data must be 2-dimensional")
+
+    def _align_features(self, X_test):
+        """Helper method to align features with training data."""
+        if hasattr(self.model, "feature_names_in_"):
+            model_features = list(self.model.feature_names_in_)
+            missing_cols = set(model_features) - set(X_test.columns)
+            if missing_cols:
+                error_msg = (
+                    f"X_test is missing columns required by the model: {missing_cols}. "
+                    f"Model was trained on: {model_features}"
+                )
+                if self.logger:
+                    self.logger.error(error_msg)
+                else:
+                    print(error_msg)
+                raise ValueError(error_msg)
+            return X_test[model_features]
+        elif self.logger:
+            self.logger.warning(
+                "Model does not have 'feature_names_in_'. "
+                "Proceeding with X_test as is. This may lead to errors if features mismatch."
+            )
+        return X_test
 
     def predict(self, X_test: pd.DataFrame) -> pd.Series:
         """
         Makes predictions using the trained Decision Tree model.
+        Ensures X_test columns match those seen during training if feature_names_in_ is available.
 
         Args:
             X_test (pd.DataFrame): Test features.
@@ -86,14 +129,35 @@ class DecisionTreeClassifier(BaseClassifier):
             pd.Series: Predicted labels.
 
         Raises:
-            ValueError: If the model has not been trained yet or data validation fails.
+            ValueError: If the model has not been trained yet, or if X_test is missing required columns.
         """
-        if not self.is_fitted_:
-            raise ValueError("Model must be trained before making predictions")
+        if (
+            self.model is None
+            or not hasattr(self.model, "tree_")
+            or self.model.tree_ is None
+        ):
+            error_msg = "Model not trained yet or training failed. Call train() first."
+            if self.logger:
+                self.logger.error(error_msg)
+            else:
+                print(error_msg)
+            raise ValueError(error_msg)
 
         try:
-            predictions = self.model.predict(X_test)
-            return pd.Series(predictions, index=X_test.index, name="predictions")
+            X_test_aligned = self._align_features(X_test)
+            X_test_aligned = self._prepare_features(X_test_aligned)
+            predictions = self.model.predict(X_test_aligned)
+            return pd.Series(
+                predictions, index=X_test_aligned.index, name="predictions"
+            )
+        except ValueError as ve:
+            if self.logger:
+                self.logger.error(
+                    f"ValueError during Decision Tree prediction: {ve}", exc_info=True
+                )
+            else:
+                print(f"ValueError during Decision Tree prediction: {ve}")
+            raise
         except Exception as e:
             self.logger.error(f"Error during prediction: {e}")
             raise
@@ -101,6 +165,7 @@ class DecisionTreeClassifier(BaseClassifier):
     def predict_proba(self, X_test: pd.DataFrame) -> pd.DataFrame:
         """
         Predicts class probabilities using the trained Decision Tree model.
+        Ensures X_test columns match those seen during training if feature_names_in_ is available.
 
         Args:
             X_test (pd.DataFrame): Test features.
@@ -109,16 +174,36 @@ class DecisionTreeClassifier(BaseClassifier):
             pd.DataFrame: Class probabilities with class labels as columns.
 
         Raises:
-            ValueError: If the model has not been trained yet or data validation fails.
+            ValueError: If the model has not been trained yet, or if X_test is missing required columns.
         """
-        if not self.is_fitted_:
-            raise ValueError("Model must be trained before making predictions")
+        if (
+            self.model is None
+            or not hasattr(self.model, "tree_")
+            or self.model.tree_ is None
+        ):
+            error_msg = "Model not trained yet or training failed. Call train() first."
+            if self.logger:
+                self.logger.error(error_msg)
+            else:
+                print(error_msg)
+            raise ValueError(error_msg)
 
         try:
-            probabilities = self.model.predict_proba(X_test)
+            X_test_aligned = self._align_features(X_test)
+            X_test_aligned = self._prepare_features(X_test_aligned)
+            probabilities = self.model.predict_proba(X_test_aligned)
             return pd.DataFrame(
-                probabilities, index=X_test.index, columns=self.model.classes_
+                probabilities, index=X_test_aligned.index, columns=self.model.classes_
             )
+        except ValueError as ve:
+            if self.logger:
+                self.logger.error(
+                    f"ValueError during Decision Tree probability prediction: {ve}",
+                    exc_info=True,
+                )
+            else:
+                print(f"ValueError during Decision Tree probability prediction: {ve}")
+            raise
         except Exception as e:
             self.logger.error(f"Error during probability prediction: {e}")
             raise
@@ -134,78 +219,40 @@ class DecisionTreeClassifier(BaseClassifier):
         Returns:
             Dict[str, float]: Dictionary of performance metrics.
         """
-        if not self.is_fitted_:
-            raise ValueError("Model must be trained before evaluation")
+        # predict and predict_proba will handle X_test alignment
+        predictions = self.predict(X_test)
 
         try:
             predictions = self.predict(X_test)
 
-            metrics = {
-                "accuracy": accuracy_score(y_test, predictions),
-                "precision": precision_score(y_test, predictions, zero_division=0),
-                "recall": recall_score(y_test, predictions, zero_division=0),
-                "f1_score": f1_score(y_test, predictions, zero_division=0),
-            }
-
-            try:
+            if hasattr(self.model, "predict_proba"):
                 if len(y_test.unique()) > 1 and len(self.model.classes_) > 1:
+                    # Pass the original X_test, predict_proba will align it
                     y_pred_proba = self.predict_proba(X_test)
                     if y_pred_proba.shape[1] > 1:
                         metrics["roc_auc"] = roc_auc_score(
                             y_test, y_pred_proba.iloc[:, 1]
                         )
                     else:
-                        metrics["roc_auc"] = 0.5
+                        metrics["roc_auc"] = 0.0
+                        if self.logger:
+                            self.logger.warning(
+                                "ROC AUC cannot be computed for single-class probability output."
+                            )
                 else:
                     metrics["roc_auc"] = float("nan")
-            except Exception as roc_error:
-                self.logger.warning(f"Could not calculate ROC AUC: {roc_error}")
-                metrics["roc_auc"] = float("nan")
+                    if self.logger:
+                        self.logger.warning(
+                            "ROC AUC score calculation skipped: requires multi-class labels and predictions."
+                        )
 
             return metrics
 
         except Exception as e:
-            self.logger.error(f"Error during Decision Tree evaluation: {e}")
-            return {
-                "accuracy": float("nan"),
-                "precision": float("nan"),
-                "recall": float("nan"),
-                "f1_score": float("nan"),
-                "roc_auc": float("nan"),
-            }
-
-    def get_feature_importance(self) -> Optional[pd.Series]:
-        """
-        Get feature importances from the trained Decision Tree model.
-
-        Returns:
-            pd.Series: Feature importances with feature names as index,
-                      or None if model not trained or extraction fails.
-        """
-        if not self.is_fitted_:
-            self.logger.warning(
-                "Model not trained yet. Cannot extract feature importances."
-            )
-            return None
-
-        try:
-            if (
-                hasattr(self.model, "feature_importances_")
-                and self.feature_names_ is not None
-            ):
-                importances = self.model.feature_importances_
-                importance_series = pd.Series(
-                    importances, index=self.feature_names_, name="importance"
+            if self.logger:
+                self.logger.error(
+                    f"Error during Decision Tree evaluation: {e}", exc_info=True
                 )
-                return importance_series.sort_values(ascending=False)
             else:
-                self.logger.warning(
-                    "Model feature importances not available for extraction."
-                )
-                return None
-
-        except Exception as e:
-            self.logger.error(
-                f"Error extracting Decision Tree feature importances: {e}"
-            )
-            return None
+                print(f"Error during Decision Tree evaluation: {e}")
+        return metrics

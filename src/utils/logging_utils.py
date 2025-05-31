@@ -71,6 +71,11 @@ def get_logger(name: str) -> logging.Logger:
     """Retrieves an existing logger by name. If it has no handlers,
     it sets it up with default console logging.
 
+    This is useful for library modules that want to use logging without
+    forcing a configuration if the main application hasn't set one up.
+    However, for application entry points, calling setup_logger directly
+    with desired configuration is usually preferred.
+
     Args:
         name (str): The name of the logger to retrieve or create.
 
@@ -78,7 +83,10 @@ def get_logger(name: str) -> logging.Logger:
         logging.Logger: The logger instance.
     """
     logger = logging.getLogger(name)
+    # If the logger has no handlers, it means it hasn't been configured by setup_logger yet.
+    # So, set it up with some defaults (e.g., INFO level, console output).
     if not logger.handlers:
+        # This will set it up with default: level="INFO", log_to_console=True, no file logging
         return setup_logger(name)
     return logger
 
