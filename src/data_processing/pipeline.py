@@ -4,7 +4,7 @@ from typing import Any, Dict
 from src.config import Settings
 from src.data_processing.data_preparation import DataPreparation
 from src.data_processing.dataset_creation import DatasetCreator
-from src.data_processing.feature_engineering import FeatureExtractor
+from src.data_processing.feature_engineering import FeatureEngineering
 from src.utils import LoggerMixin, setup_logger
 
 
@@ -22,7 +22,7 @@ class DataPipeline(LoggerMixin):
         # Initialize components
         self.data_prep = DataPreparation(settings)
         self.dataset_creator = DatasetCreator(settings)
-        self.feature_extractor = FeatureExtractor(settings)
+        self.feature_extractor = FeatureEngineering(settings)
 
     def _setup_logger(self):
         """Setup logger with optional file output."""
@@ -82,7 +82,7 @@ class DataPipeline(LoggerMixin):
             Dict[str, Any]: A dictionary containing the results of the feature extraction step.
         """
         return self._run_step(
-            "feature extraction", self.feature_extractor.extract_all_features
+            "feature extraction", self.feature_extractor.run_feature_extraction
         )
 
     def run_full_pipeline(self) -> None:

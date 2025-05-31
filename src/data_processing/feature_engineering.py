@@ -18,7 +18,7 @@ from src.utils import (
 )
 
 
-class FeatureExtractor(LoggerMixin):
+class FeatureEngineering(LoggerMixin):
     """
     Extracts behavioral features from labeled player datasets for churn prediction.
     Implements features described in Kim et al. (2017) for telemetry-based churn prediction.
@@ -266,14 +266,15 @@ class FeatureExtractor(LoggerMixin):
             self.logger.warning(f"Error extracting Game 2 features: {e}")
             return {"purchaseCount": 0, "highestPrice": 0.0}
 
-    def _process_single_player(
-        self, player_data: Dict, game_name: str
+    def calculate_features(
+        self, player_data: Dict, game_name: str = None
     ) -> Union[Dict[str, Any], None]:
-        """Process a single player's data to extract features.
+        """Calculate churn prediction features from processed player records.
+        Enhanced to handle both regular dataset format and pipeline format.
 
         Args:
             player_data (Dict): A dictionary containing the player's data.
-            game_name (str): The name of the game.
+            game_name (str, optional): The name of the game. If None, will auto-detect.
 
         Returns:
             Union[Dict[str, Any], None]: A dictionary containing the extracted features or None if an error occurs.
@@ -285,6 +286,16 @@ class FeatureExtractor(LoggerMixin):
 
             if not player_id or not isinstance(all_records, list):
                 return None
+
+            if game_name is None:
+                game_name = "game1"
+                for record in all_records[:10]:
+                    if (
+                        record.get("event") == "progress"
+                        and record.get("properties", {}).get("type") == "race"
+                    ):
+                        game_name = "game2"
+                        break
 
             feature_row = {
                 "player_id": player_id,
@@ -299,6 +310,189 @@ class FeatureExtractor(LoggerMixin):
         except Exception as e:
             self.logger.warning(f"Error processing player: {e}")
             return None
+
+    def compute_feature_stats(self, features_df: pd.DataFrame) -> None:
+        """Compute and log feature statistics using approach adapted for DataFrames.
+
+        Args:
+            features_df: DataFrame containing extracted features
+        """
+        if features_df.empty:
+            self.logger.info("Feature stats - No features found to summarize.")
+            return
+
+        active_durations = features_df.get(
+            "activeDuration", pd.Series(dtype=float)
+        ).dropna()
+        play_counts = features_df.get("playCount", pd.Series(dtype=int)).dropna()
+        mean_scores = features_df.get("meanScore", pd.Series(dtype=float)).dropna()
+
+        if len(active_durations) > 0 and len(play_counts) > 0:
+            self.logger.info(
+                "Feature stats - activeDuration: avg=%.2fh, playCount: avg=%.1f, meanScore: avg=%.1f",
+                active_durations.mean(),
+                play_counts.mean(),
+                mean_scores.mean() if len(mean_scores) > 0 else 0,
+            )
+        else:
+            self.logger.info("Feature stats - No features found to summarize.")
+
+    def extract_features_from_dataset(
+        self, dataset_file: Union[str, Path], game_name: str
+    ) -> pd.DataFrame:
+        """
+        Extracts features from a labeled dataset file using Kim et al. (2017) methodology.
+
+        Args:
+            dataset_file (Union[str, Path]): The path to the dataset file.
+            game_name (str): The name of the game.
+
+        Returns:
+            pd.DataFrame: A pandas dataframe containing the extracted features.
+        """
+        dataset_path = self._get_path(dataset_file)
+
+        if not dataset_path.exists():
+            raise FileNotFoundError(f"Dataset file not found: {dataset_path}")
+
+        total_lines = count_lines(dataset_path)
+        self.logger.info(
+            f"Extracting features from {dataset_file} for {game_name} ({total_lines:,} players)"
+        )
+
+        features_list = []
+        errors_count = 0
+
+        for line_num, player_data in enumerate(jsonl_iterator(dataset_path)):
+            if (line_num + 1) % self.settings.progress_interval == 0:
+                progress = (line_num + 1) / total_lines * 100 if total_lines > 0 else 0
+                self.logger.info(
+                    f"Processed {line_num + 1:,} players ({progress:.1f}%)..."
+                )
+
+            feature_row = self.calculate_features(player_data, game_name)
+
+            if feature_row is None:
+                errors_count += 1
+                if errors_count > total_lines * 0.1:
+                    self.logger.error("Too many errors, stopping extraction.")
+                    break
+            else:
+                features_list.append(feature_row)
+
+        if errors_count > 0:
+            self.logger.warning(
+                f"Feature extraction completed with {errors_count} errors"
+            )
+
+        self.logger.info(
+            f"Successfully extracted features for {len(features_list):,} players from {game_name}"
+        )
+
+        df = pd.DataFrame(features_list)
+        if df.empty:
+            raise ValueError("No features extracted - check input data format")
+
+        return self._validate_and_clean_features(df, game_name)
+
+    def run_feature_extraction(self) -> None:
+        """
+        Run feature extraction for all datasets.
+
+        Raises:
+            FileNotFoundError: If the input file is not found.
+            ValueError: If the input data format is invalid.
+            Exception: If an error occurs during feature extraction.
+        """
+        self.logger.info("Starting feature extraction for all datasets...")
+        extraction_start_time = time.time()
+
+        datasets = [
+            (
+                self.settings.game1_ds1,
+                "game1",
+                self.settings.game1_ds1_features,
+                "game1_DS1",
+            ),
+            (
+                self.settings.game1_ds2,
+                "game1",
+                self.settings.game1_ds2_features,
+                "game1_DS2",
+            ),
+            (
+                self.settings.game2_ds1,
+                "game2",
+                self.settings.game2_ds1_features,
+                "game2_DS1",
+            ),
+            (
+                self.settings.game2_ds2,
+                "game2",
+                self.settings.game2_ds2_features,
+                "game2_DS2",
+            ),
+        ]
+
+        successful_extractions = 0
+        failed_extractions = 0
+        all_features_dfs = []
+
+        for input_file, game_name, output_file, dataset_name in datasets:
+            dataset_start_time = time.time()
+            input_path = self.processed_dir / input_file
+
+            if not input_path.exists():
+                self.logger.warning(
+                    f"Input file not found: {input_file}, skipping {dataset_name}"
+                )
+                failed_extractions += 1
+                continue
+
+            try:
+                features_df = self.extract_features_from_dataset(input_file, game_name)
+                output_path = self.features_dir / output_file
+                features_df.to_csv(output_path, index=False)
+                dataset_time = time.time() - dataset_start_time
+
+                total_players = len(features_df)
+
+                self.logger.info(
+                    "Processed %s: %d players, skipped %d, %s",
+                    dataset_name,
+                    total_players,
+                    0,
+                    format_duration(dataset_time),
+                )
+                successful_extractions += 1
+                all_features_dfs.append(features_df)
+            except Exception as e:
+                self.logger.error(f"✗ Error processing {dataset_name}: {e}")
+                failed_extractions += 1
+
+        total_extraction_time = time.time() - extraction_start_time
+
+        self.logger.info(
+            "Feature extraction completed in %s",
+            format_duration(total_extraction_time),
+        )
+
+        if all_features_dfs:
+            combined_df = pd.concat(all_features_dfs, ignore_index=True)
+            self.compute_feature_stats(combined_df)
+
+        if successful_extractions == len(datasets):
+            self.logger.info(
+                f"🎉 Feature extraction completed successfully! "
+                f"{successful_extractions}/{len(datasets)} datasets processed "
+                f"in {format_duration(total_extraction_time)}"
+            )
+        else:
+            self.logger.warning(
+                f"⚠️ Feature extraction completed with issues: "
+                f"{successful_extractions}/{len(datasets)} datasets successful, "
+                f"{failed_extractions} failed in {format_duration(total_extraction_time)}"
+            )
 
     def _validate_and_clean_features(
         self, df: pd.DataFrame, game_name: str
@@ -344,150 +538,3 @@ class FeatureExtractor(LoggerMixin):
             f"(expected: {expected_features}), {churn_rate:.1%} churn rate"
         )
         return df
-
-    def extract_features_from_dataset(
-        self, dataset_file: Union[str, Path], game_name: str
-    ) -> pd.DataFrame:
-        """
-        Extracts features from a labeled dataset file using Kim et al. (2017) methodology.
-
-        Args:
-            dataset_file (Union[str, Path]): The path to the dataset file.
-            game_name (str): The name of the game.
-
-        Returns:
-            pd.DataFrame: A pandas dataframe containing the extracted features.
-        """
-        dataset_path = self._get_path(dataset_file)
-
-        if not dataset_path.exists():
-            raise FileNotFoundError(f"Dataset file not found: {dataset_path}")
-
-        total_lines = count_lines(dataset_path)
-        self.logger.info(
-            f"Extracting features from {dataset_file} for {game_name} ({total_lines:,} players)"
-        )
-
-        features_list = []
-        errors_count = 0
-
-        for line_num, player_data in enumerate(jsonl_iterator(dataset_path)):
-            if (line_num + 1) % self.settings.progress_interval == 0:
-                progress = (line_num + 1) / total_lines * 100 if total_lines > 0 else 0
-                self.logger.info(
-                    f"Processed {line_num + 1:,} players ({progress:.1f}%)..."
-                )
-
-            feature_row = self._process_single_player(player_data, game_name)
-
-            if feature_row is None:
-                errors_count += 1
-                if errors_count > total_lines * 0.1:
-                    self.logger.error("Too many errors, stopping extraction.")
-                    break
-            else:
-                features_list.append(feature_row)
-
-        if errors_count > 0:
-            self.logger.warning(
-                f"Feature extraction completed with {errors_count} errors"
-            )
-
-        self.logger.info(
-            f"Successfully extracted features for {len(features_list):,} players from {game_name}"
-        )
-
-        df = pd.DataFrame(features_list)
-        if df.empty:
-            raise ValueError("No features extracted - check input data format")
-
-        return self._validate_and_clean_features(df, game_name)
-
-    def extract_all_features(self) -> None:
-        """
-        Extracts features from all configured labeled datasets and provides a summary report.
-
-        Raises:
-            FileNotFoundError: If the input file is not found.
-            ValueError: If the input data format is invalid.
-            Exception: If an error occurs during feature extraction.
-        """
-        self.logger.info("Starting feature extraction for all datasets...")
-        extraction_start_time = time.time()
-
-        datasets = [
-            (
-                self.settings.game1_ds1,
-                "game1",
-                self.settings.game1_ds1_features,
-                "game1_DS1",
-            ),
-            (
-                self.settings.game1_ds2,
-                "game1",
-                self.settings.game1_ds2_features,
-                "game1_DS2",
-            ),
-            (
-                self.settings.game2_ds1,
-                "game2",
-                self.settings.game2_ds1_features,
-                "game2_DS1",
-            ),
-            (
-                self.settings.game2_ds2,
-                "game2",
-                self.settings.game2_ds2_features,
-                "game2_DS2",
-            ),
-        ]
-
-        successful_extractions = 0
-        failed_extractions = 0
-
-        for input_file, game_name, output_file, dataset_name in datasets:
-            dataset_start_time = time.time()
-            input_path = self.processed_dir / input_file
-
-            if not input_path.exists():
-                self.logger.warning(
-                    f"Input file not found: {input_file}, skipping {dataset_name}"
-                )
-                failed_extractions += 1
-                continue
-
-            try:
-                features_df = self.extract_features_from_dataset(input_file, game_name)
-                output_path = self.features_dir / output_file
-                features_df.to_csv(output_path, index=False)
-                dataset_time = time.time() - dataset_start_time
-
-                total_players = len(features_df)
-                churned_players = features_df["churned"].sum()
-                churn_rate = churned_players / total_players if total_players > 0 else 0
-                feature_count = len(features_df.columns) - 2
-
-                self.logger.info(
-                    f"✓ {dataset_name}: {total_players:,} players, "
-                    f"{churned_players} churned ({churn_rate:.2%}), "
-                    f"{feature_count} features, {format_duration(dataset_time)}"
-                )
-                successful_extractions += 1
-            except Exception as e:
-                self.logger.error(f"✗ Error processing {dataset_name}: {e}")
-                failed_extractions += 1
-
-        total_extraction_time = time.time() - extraction_start_time
-
-        if successful_extractions == len(datasets):
-            self.logger.info(
-                f"🎉 Feature extraction completed successfully! "
-                f"{successful_extractions}/{len(datasets)} datasets processed "
-                f"in {format_duration(total_extraction_time)}"
-            )
-        else:
-            self.logger.warning(
-                f"⚠️ Feature extraction completed with issues: "
-                f"{successful_extractions}/{len(datasets)} datasets successful, "
-                f"{failed_extractions} failed in {format_duration(total_extraction_time)}"
-            )

@@ -117,6 +117,8 @@ def main() -> None:
         pipeline = DataPipeline(settings)
         run_pipeline_steps(pipeline, args)
 
+        print("\n🎉 Pipeline execution completed successfully!")
+
     except KeyboardInterrupt:
         print("\nPipeline interrupted by user.")
         sys.exit(1)
