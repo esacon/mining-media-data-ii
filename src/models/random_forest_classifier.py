@@ -61,29 +61,40 @@ class RandomForestClassifier(BaseClassifier):
     def predict(self, X_test: pd.DataFrame) -> pd.Series:
         """
         Makes predictions using the trained Random Forest model.
-
-        Args:
-            X_test (pd.DataFrame): Test features.
-
-        Returns:
-            pd.Series: Predicted labels.
-
-        Raises:
-            ValueError: If the model has not been trained yet.
+        Ensures X_test columns match those seen during training.
         """
-        if self.model is None or not hasattr(
-            self.model, "estimators_"
-        ):  # Check if model is fitted
+        if self.model is None or not hasattr(self.model, "estimators_"):
             error_msg = "Model not trained yet or training failed. Call train() first."
-            if self.logger:
-                self.logger.error(error_msg)
-            else:
-                print(error_msg)
+            if self.logger: self.logger.error(error_msg)
+            else: print(error_msg)
             raise ValueError(error_msg)
 
         try:
-            predictions = self.model.predict(X_test)
-            return pd.Series(predictions, index=X_test.index, name="predictions")
+            X_test_aligned = X_test
+            if hasattr(self.model, "feature_names_in_"):
+                model_features = list(self.model.feature_names_in_)
+                missing_cols = set(model_features) - set(X_test.columns)
+                if missing_cols:
+                    error_msg = (
+                        f"X_test is missing columns required by the model: {missing_cols}. "
+                        f"Model was trained on: {model_features}"
+                    )
+                    if self.logger: self.logger.error(error_msg)
+                    else: print(error_msg)
+                    raise ValueError(error_msg)
+                X_test_aligned = X_test[model_features]
+            elif self.logger:
+                 self.logger.warning(
+                        "Model does not have 'feature_names_in_'. "
+                        "Proceeding with X_test as is. This may lead to errors if features mismatch."
+                    )
+
+            predictions = self.model.predict(X_test_aligned)
+            return pd.Series(predictions, index=X_test_aligned.index, name="predictions")
+        except ValueError as ve:
+            if self.logger: self.logger.error(f"ValueError during Random Forest prediction: {ve}", exc_info=True)
+            else: print(f"ValueError during Random Forest prediction: {ve}")
+            raise
         except Exception as e:
             if self.logger:
                 self.logger.error(
@@ -96,31 +107,42 @@ class RandomForestClassifier(BaseClassifier):
     def predict_proba(self, X_test: pd.DataFrame) -> pd.DataFrame:
         """
         Predicts class probabilities using the trained Random Forest model.
-
-        Args:
-            X_test (pd.DataFrame): Test features.
-
-        Returns:
-            pd.DataFrame: Class probabilities. Columns are class labels.
-
-        Raises:
-            ValueError: If the model has not been trained yet.
+        Ensures X_test columns match those seen during training.
         """
-        if self.model is None or not hasattr(
-            self.model, "estimators_"
-        ):  # Check if model is fitted
+        if self.model is None or not hasattr(self.model, "estimators_"):
             error_msg = "Model not trained yet or training failed. Call train() first."
-            if self.logger:
-                self.logger.error(error_msg)
-            else:
-                print(error_msg)
+            if self.logger: self.logger.error(error_msg)
+            else: print(error_msg)
             raise ValueError(error_msg)
 
         try:
-            probabilities = self.model.predict_proba(X_test)
+            X_test_aligned = X_test
+            if hasattr(self.model, "feature_names_in_"):
+                model_features = list(self.model.feature_names_in_)
+                missing_cols = set(model_features) - set(X_test.columns)
+                if missing_cols:
+                    error_msg = (
+                        f"X_test is missing columns required by the model for predict_proba: {missing_cols}. "
+                        f"Model was trained on: {model_features}"
+                    )
+                    if self.logger: self.logger.error(error_msg)
+                    else: print(error_msg)
+                    raise ValueError(error_msg)
+                X_test_aligned = X_test[model_features]
+            elif self.logger:
+                 self.logger.warning(
+                        "Model does not have 'feature_names_in_'. "
+                        "Proceeding with X_test as is for predict_proba. This may lead to errors if features mismatch."
+                    )
+                    
+            probabilities = self.model.predict_proba(X_test_aligned)
             return pd.DataFrame(
-                probabilities, index=X_test.index, columns=self.model.classes_
+                probabilities, index=X_test_aligned.index, columns=self.model.classes_
             )
+        except ValueError as ve:
+            if self.logger: self.logger.error(f"ValueError during Random Forest probability prediction: {ve}", exc_info=True)
+            else: print(f"ValueError during Random Forest probability prediction: {ve}")
+            raise
         except Exception as e:
             if self.logger:
                 self.logger.error(
@@ -134,15 +156,8 @@ class RandomForestClassifier(BaseClassifier):
     def evaluate(self, X_test: pd.DataFrame, y_test: pd.Series) -> Dict[str, float]:
         """
         Evaluates the Random Forest model.
-
-        Args:
-            X_test (pd.DataFrame): Test features.
-            y_test (pd.Series): True test labels.
-
-        Returns:
-            Dict[str, float]: Dictionary of performance metrics.
         """
-        predictions = self.predict(X_test)
+        predictions = self.predict(X_test) # Handles X_test alignment
         metrics = {}
         try:
             metrics["accuracy"] = accuracy_score(y_test, predictions)
@@ -152,7 +167,7 @@ class RandomForestClassifier(BaseClassifier):
 
             if hasattr(self.model, "predict_proba"):
                 if len(y_test.unique()) > 1 and len(self.model.classes_) > 1:
-                    y_pred_proba = self.predict_proba(X_test)
+                    y_pred_proba = self.predict_proba(X_test) # Handles X_test alignment
                     if y_pred_proba.shape[1] > 1:
                         metrics["roc_auc"] = roc_auc_score(
                             y_test, y_pred_proba.iloc[:, 1]
@@ -169,7 +184,7 @@ class RandomForestClassifier(BaseClassifier):
                         self.logger.warning(
                             "ROC AUC score calculation skipped: requires multi-class labels and predictions."
                         )
-
+            
             if self.logger:
                 self.logger.info(f"Random Forest evaluation metrics: {metrics}")
             else:
@@ -182,5 +197,4 @@ class RandomForestClassifier(BaseClassifier):
                 )
             else:
                 print(f"Error during Random Forest evaluation: {e}")
-
         return metrics

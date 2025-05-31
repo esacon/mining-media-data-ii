@@ -1,58 +1,82 @@
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union # Added Union
 
+# Default format string can be defined as a constant
+DEFAULT_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 def setup_logger(
     name: str,
-    level: int = logging.INFO,
-    log_file: Optional[str] = None,
+    level_str: str = "INFO", # Changed to string for user-friendliness
+    log_file: Optional[Union[str, Path]] = None, # Accepts str or Path
     format_string: Optional[str] = None,
+    log_to_console: bool = True # Added this parameter
 ) -> logging.Logger:
-    """Sets up a logger with consistent formatting and optional file output.
+    """Sets up a logger with consistent formatting, optional file output,
+    and controllable console output.
 
     Args:
         name (str): The name of the logger.
-        level (int): The logging level (e.g., logging.INFO, logging.DEBUG).
-                     Defaults to logging.INFO.
-        log_file (Optional[str]): Optional path to a log file where messages will also be written.
-                                   If None, logs only to console.
+        level_str (str): The logging level string (e.g., "INFO", "DEBUG").
+                         Defaults to "INFO".
+        log_file (Optional[Union[str, Path]]): Optional path to a log file.
         format_string (Optional[str]): Optional custom format string for log messages.
-                                       If None, a default format is used.
+        log_to_console (bool): If True, logs to console. Defaults to True.
 
     Returns:
         logging.Logger: The configured logger instance.
     """
-    if format_string is None:
-        format_string = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-
     logger = logging.getLogger(name)
-    logger.setLevel(level)
+    
+    # Convert string level to logging level integer
+    log_level_int = getattr(logging, level_str.upper(), logging.INFO)
+    logger.setLevel(log_level_int)
 
-    logger.handlers.clear()
+    # Clear existing handlers to avoid duplicate logs if called multiple times on the same logger
+    if logger.hasHandlers():
+        logger.handlers.clear()
 
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(level)
-    console_formatter = logging.Formatter(format_string)
-    console_handler.setFormatter(console_formatter)
-    logger.addHandler(console_handler)
+    current_format_string = format_string if format_string is not None else DEFAULT_LOG_FORMAT
+    formatter = logging.Formatter(current_format_string)
+
+    if log_to_console:
+        console_handler = logging.StreamHandler(sys.stdout)
+        # console_handler.setLevel(log_level_int) # Handler level inherits from logger if not set
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
 
     if log_file:
-        log_path = Path(log_file)
-        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_file_path = Path(log_file)
+        try:
+            log_file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_handler = logging.FileHandler(log_file_path, mode='a', encoding='utf-8')
+            # file_handler.setLevel(log_level_int) # Handler level inherits from logger
+            file_handler.setFormatter(formatter)
+            logger.addHandler(file_handler)
+        except Exception as e:
+            # Fallback to console if file logging setup fails
+            print(f"Warning: Could not set up file logging for {name} at {log_file_path}. Error: {e}", file=sys.stderr)
+            if not log_to_console: # If console wasn't already on, add it now
+                console_handler_fallback = logging.StreamHandler(sys.stdout)
+                console_handler_fallback.setFormatter(formatter)
+                logger.addHandler(console_handler_fallback)
 
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setLevel(level)
-        file_formatter = logging.Formatter(format_string)
-        file_handler.setFormatter(file_formatter)
-        logger.addHandler(file_handler)
 
+    # Prevent log messages from being passed to the root logger if this logger has handlers
+    logger.propagate = False 
+    
     return logger
 
 
 def get_logger(name: str) -> logging.Logger:
-    """Retrieves an existing logger by name or sets up a new one with default configuration.
+    """Retrieves an existing logger by name. If it has no handlers,
+    it sets it up with default console logging.
+
+    This is useful for library modules that want to use logging without
+    forcing a configuration if the main application hasn't set one up.
+    However, for application entry points, calling setup_logger directly
+    with desired configuration is usually preferred.
 
     Args:
         name (str): The name of the logger to retrieve or create.
@@ -61,27 +85,36 @@ def get_logger(name: str) -> logging.Logger:
         logging.Logger: The logger instance.
     """
     logger = logging.getLogger(name)
+    # If the logger has no handlers, it means it hasn't been configured by setup_logger yet.
+    # So, set it up with some defaults (e.g., INFO level, console output).
     if not logger.handlers:
-        return setup_logger(name)
+        # This will set it up with default: level="INFO", log_to_console=True, no file logging
+        return setup_logger(name) 
     return logger
 
 
 class LoggerMixin:
-    """A mixin class that provides a convenient `logger` property to any class.
+    """A mixin class that provides a convenient `logger` property.
 
     Classes inheriting from LoggerMixin will have a `self.logger` attribute
     that returns a `logging.Logger` instance named after the class.
+    The logger is configured via `get_logger` on first access.
     """
 
     @property
     def logger(self) -> logging.Logger:
         """Gets the logger instance for the current class.
 
-        The logger is created and cached on the first access.
-
-        Returns:
-            logging.Logger: The logger instance for the class.
+        The logger is created and cached on the first access using get_logger.
         """
-        if not hasattr(self, "_logger"):
-            self._logger = get_logger(self.__class__.__name__)
-        return self._logger
+        # The class name is used as the logger name.
+        class_name = self.__class__.__name__
+        
+        # Check if a logger specific to this instance with this name already exists and is configured
+        # This avoids re-configuring if get_logger is called multiple times.
+        # However, get_logger itself handles the "configure if no handlers" logic.
+        
+        # Using a private attribute to cache the logger for the instance.
+        if not hasattr(self, "_logger_instance_cache"):
+            self._logger_instance_cache = get_logger(class_name)
+        return self._logger_instance_cache
