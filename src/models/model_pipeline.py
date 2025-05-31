@@ -9,6 +9,7 @@ from src.config import Settings
 from src.models.base_classifier import BaseClassifier
 from src.models.decision_tree_classifier import DecisionTreeClassifier
 from src.models.logistic_regression_classifier import LogisticRegressionClassifier
+from src.models.model_config import ModelConfigManager
 from src.models.random_forest_classifier import RandomForestClassifier
 from src.utils import LoggerMixin, save_json
 
@@ -26,6 +27,7 @@ class ModelPipeline(LoggerMixin):
             settings (Settings): Configuration settings containing paths, model parameters, etc.
         """
         self.settings = settings
+        self.config_manager = ModelConfigManager(settings)
         self.processed_dir = settings.processed_dir
         self.results_dir = settings.results_dir
         self.features_dir = self.results_dir / "features"
@@ -37,6 +39,9 @@ class ModelPipeline(LoggerMixin):
         self.logger.info("ModelPipeline initialized.")
         self.logger.info(f"Results directory: {self.results_dir}")
         self.logger.info(f"Models output directory: {self.models_output_dir}")
+
+        # Log configuration summary
+        self.config_manager.log_configuration_summary()
 
         self.all_game_metrics: Dict[str, Dict[str, Dict[str, float]]] = {}
         self.all_feature_importance: Dict[str, Dict[str, Dict[str, float]]] = {}
@@ -152,6 +157,32 @@ class ModelPipeline(LoggerMixin):
 
         return df[target_column].astype(int)
 
+    def _detect_id_columns(self, df: pd.DataFrame) -> List[str]:
+        """
+        Automatically detects ID-like columns that should not be used for modeling.
+
+        Args:
+            df (pd.DataFrame): DataFrame to analyze.
+
+        Returns:
+            List[str]: List of column names that appear to be ID columns.
+        """
+        id_columns = []
+
+        for col in df.columns:
+            if col in ["player_id", "op_start", "op_end", "cp_start", "cp_end"]:
+                id_columns.append(col)
+                continue
+
+            if df[col].dtype == "object":
+                unique_ratio = df[col].nunique() / len(df)
+                avg_length = df[col].astype(str).str.len().mean()
+
+                if unique_ratio > 0.8 and avg_length > 10:
+                    id_columns.append(col)
+
+        return id_columns
+
     def _clean_feature_columns(self, X: pd.DataFrame, game_id: str) -> pd.DataFrame:
         """
         Cleans and validates feature columns, converting to numeric and handling NaNs.
@@ -166,22 +197,38 @@ class ModelPipeline(LoggerMixin):
         if X.empty:
             return X
 
-        for col in X.columns:
-            if not pd.api.types.is_numeric_dtype(X[col]):
-                X[col] = pd.to_numeric(X[col], errors="coerce")
+        X_clean = X.copy()
+        id_columns = self._detect_id_columns(X_clean)
 
-        if X.isnull().values.any():
-            nan_counts = X.isnull().sum()
+        for col in X_clean.columns:
+            if col in id_columns:
+                continue
+
+            if not pd.api.types.is_numeric_dtype(X_clean[col]):
+                X_clean[col] = pd.to_numeric(X_clean[col], errors="coerce")
+
+        if X_clean.isnull().values.any():
+            nan_counts = X_clean.isnull().sum()
             nan_cols = nan_counts[nan_counts > 0].index
             self.logger.warning(
                 f"NaN values found in feature columns for {game_id}: {list(nan_cols)}"
             )
+
             for col in nan_cols:
-                median_val = X[col].median()
-                X[col].fillna(median_val, inplace=True)
-                if X[col].isnull().any():
-                    X[col].fillna(0, inplace=True)
-        return X
+                median_val = X_clean[col].median()
+
+                if pd.isna(median_val):
+                    self.logger.warning(
+                        f"Column '{col}' has all NaN values for {game_id}. Filling with 0."
+                    )
+                    X_clean[col] = 0
+                else:
+                    X_clean.loc[:, col] = X_clean[col].fillna(median_val)
+
+                    if X_clean[col].isnull().any():
+                        X_clean.loc[:, col] = X_clean[col].fillna(0)
+
+        return X_clean
 
     def _remove_constant_columns(
         self, X: pd.DataFrame, game_id: str
@@ -196,16 +243,132 @@ class ModelPipeline(LoggerMixin):
         Returns:
             Tuple[pd.DataFrame, List[str]]: Cleaned DataFrame and list of remaining feature names.
         """
-        constant_cols = [col for col in X.columns if X[col].nunique() <= 1]
+        constant_cols = []
+        for col in X.columns:
+            unique_vals = X[col].nunique()
+            if unique_vals <= 1:
+                constant_cols.append(col)
+            elif unique_vals == 2 and X[col].var() < 1e-10:
+                constant_cols.append(col)
+
         if constant_cols:
             self.logger.warning(
-                f"Constant columns found for {game_id}: {constant_cols}. Dropping them."
+                f"Constant/low-variance columns found for {game_id}: {constant_cols}. Dropping them."
             )
-            X = X.drop(columns=constant_cols)
-        feature_columns = list(X.columns)
+            X_clean = X.drop(columns=constant_cols)
+        else:
+            X_clean = X.copy()
+
+        feature_columns = list(X_clean.columns)
         if not feature_columns:
             self.logger.error(f"No feature columns remaining for {game_id}")
-        return X, feature_columns
+
+        return X_clean, feature_columns
+
+    def _handle_multicollinearity(
+        self, X: pd.DataFrame, game_id: str, threshold: Optional[float] = None
+    ) -> Tuple[pd.DataFrame, List[str]]:
+        """
+        Detects and removes highly correlated features to reduce multicollinearity.
+
+        Args:
+            X (pd.DataFrame): DataFrame of features.
+            game_id (str): Identifier for the game (for logging).
+            threshold (float, optional): Correlation threshold above which features are considered highly correlated.
+                                       If None, uses settings.multicollinearity_threshold.
+
+        Returns:
+            Tuple[pd.DataFrame, List[str]]: DataFrame with correlated features removed and list of removed features.
+        """
+        if threshold is None:
+            threshold = self.config_manager.get_multicollinearity_threshold()
+
+        if X.shape[1] < 2:
+            return X, []
+
+        correlation_matrix = X.corr().abs()
+        highly_correlated_pairs = []
+        features_to_remove = set()
+
+        for i in range(len(correlation_matrix.columns)):
+            for j in range(i + 1, len(correlation_matrix.columns)):
+                corr_value = correlation_matrix.iloc[i, j]
+                if corr_value > threshold:
+                    feature_i = correlation_matrix.columns[i]
+                    feature_j = correlation_matrix.columns[j]
+                    highly_correlated_pairs.append((feature_i, feature_j, corr_value))
+
+                    if feature_i > feature_j:
+                        features_to_remove.add(feature_i)
+                    else:
+                        features_to_remove.add(feature_j)
+
+        if highly_correlated_pairs:
+            self.logger.warning(
+                f"Highly correlated feature pairs (>{threshold}) found for {game_id}: {highly_correlated_pairs}"
+            )
+
+        if features_to_remove:
+            features_to_remove = list(features_to_remove)
+            self.logger.info(
+                f"Removing {len(features_to_remove)} highly correlated features for {game_id}: {features_to_remove}"
+            )
+            X_clean = X.drop(columns=features_to_remove)
+            return X_clean, features_to_remove
+
+        return X, []
+
+    def _validate_data_quality(
+        self, X: pd.DataFrame, y: pd.Series, game_id: str
+    ) -> bool:
+        """
+        Validates data quality before model training.
+
+        Args:
+            X (pd.DataFrame): Feature DataFrame.
+            y (pd.Series): Target Series.
+            game_id (str): Identifier for the game.
+
+        Returns:
+            bool: True if data passes validation, False otherwise.
+        """
+        if X.empty or y.empty:
+            self.logger.error(f"Empty dataset for {game_id}")
+            return False
+
+        if len(X) != len(y):
+            self.logger.error(
+                f"Shape mismatch for {game_id}: X has {len(X)} rows, y has {len(y)} rows"
+            )
+            return False
+
+        if np.isinf(X.values).any():
+            self.logger.error(f"Infinite values found in features for {game_id}")
+            return False
+
+        if X.isnull().values.any():
+            self.logger.error(f"NaN values still present in features for {game_id}")
+            return False
+
+        if y.isnull().any():
+            self.logger.error(f"NaN values found in target for {game_id}")
+            return False
+
+        class_counts = y.value_counts()
+        min_samples = 10
+        if (class_counts < min_samples).any():
+            self.logger.warning(
+                f"Classes with fewer than {min_samples} samples for {game_id}: {class_counts[class_counts < min_samples]}"
+            )
+
+        class_ratio = class_counts.min() / class_counts.max()
+        if class_ratio < 0.01:
+            self.logger.warning(
+                f"Extremely imbalanced classes for {game_id} (ratio: {class_ratio:.4f}): {class_counts.to_dict()}"
+            )
+
+        self.logger.info(f"Data quality validation passed for {game_id}")
+        return True
 
     def _prepare_data_for_model(
         self, df: pd.DataFrame, game_id: str, target_column: str = "churned"
@@ -226,22 +389,37 @@ class ModelPipeline(LoggerMixin):
         if y is None:
             return None
 
-        feature_columns = [col for col in df.columns if col != target_column]
+        id_columns = self._detect_id_columns(df)
+        exclude_columns = [target_column] + id_columns
+        feature_columns = [col for col in df.columns if col not in exclude_columns]
+
         X = df[feature_columns].copy()
         X = self._clean_feature_columns(X, game_id)
-        X, feature_names = self._remove_constant_columns(X, game_id)
 
+        X, feature_names = self._remove_constant_columns(X, game_id)
         if not feature_names:
             return None
 
+        X, removed_features = self._handle_multicollinearity(X, game_id)
+        feature_names = list(X.columns)
+
+        if removed_features:
+            self.logger.info(
+                f"Final feature count after multicollinearity removal: {len(feature_names)}"
+            )
+
         y = y.loc[X.index]
+
+        if not self._validate_data_quality(X, y, game_id):
+            return None
+
         return X, y, feature_names
 
     def _perform_data_inspection(
         self, X_train: pd.DataFrame, X_test: pd.DataFrame, game_id: str
     ):
         """
-        Performs detailed data inspection (NaN/Inf, correlations) on scaled data.
+        Performs essential data inspection on scaled data.
 
         Args:
             X_train (pd.DataFrame): Scaled training features.
@@ -249,13 +427,23 @@ class ModelPipeline(LoggerMixin):
             game_id (str): Identifier for the game.
         """
         self._print_subheader(f"Data Inspection ({game_id}) PRE-TRAINING")
-        self.logger.info(f"X_train (scaled) sample:\n{X_train.head()}")
-        self.logger.info(f"X_train (scaled) description:\n{X_train.describe().T}")
+
+        self.logger.info(f"X_train (scaled) shape: {X_train.shape}")
+        self.logger.info(f"X_test (scaled) shape: {X_test.shape}")
+
+        train_nan_check = X_train.isnull().values.any()
+        train_inf_check = np.isinf(X_train.values).any()
+        test_nan_check = X_test.isnull().values.any()
+        test_inf_check = np.isinf(X_test.values).any()
 
         self.logger.info(
-            f"X_train (scaled) NaN/Inf check: NaNs: {X_train.isnull().values.any()}, Infs: {np.isinf(X_train.values).any()}"
+            f"X_train (scaled) NaN/Inf check: NaNs: {train_nan_check}, Infs: {train_inf_check}"
+        )
+        self.logger.info(
+            f"X_test (scaled) NaN/Inf check: NaNs: {test_nan_check}, Infs: {test_inf_check}"
         )
 
+        # Check for low variance columns
         variances = X_train.var()
         low_variance_cols = variances[variances < 1e-6]
         if not low_variance_cols.empty:
@@ -267,17 +455,15 @@ class ModelPipeline(LoggerMixin):
                 "No columns with extremely low variance (<1e-6) in X_train found after scaling."
             )
 
-        self.logger.info(
-            f"X_test (scaled) NaN/Inf check: NaNs: {X_test.isnull().values.any()}, Infs: {np.isinf(X_test.values).any()}"
-        )
-
+        # Check for high correlations
         self.logger.info("Correlation Matrix of Scaled X_train:")
         correlation_matrix = X_train.corr()
         highly_correlated = []
 
         for i in range(len(correlation_matrix.columns)):
-            for j in range(i):
-                if abs(correlation_matrix.iloc[i, j]) > 0.95:
+            for j in range(i + 1, len(correlation_matrix.columns)):
+                corr_value = abs(correlation_matrix.iloc[i, j])
+                if corr_value > 0.8:
                     highly_correlated.append(
                         (
                             correlation_matrix.columns[i],
@@ -287,12 +473,33 @@ class ModelPipeline(LoggerMixin):
                     )
 
         if highly_correlated:
-            self.logger.warning(
-                f"Highly correlated feature pairs in X_train (>0.95 absolute): {highly_correlated}"
+            self.logger.info(
+                f"Feature pairs with correlation >0.8 in X_train: {highly_correlated}"
             )
         else:
             self.logger.info(
-                "No highly correlated feature pairs (>0.95) found in X_train."
+                "No highly correlated feature pairs (>0.8) found in X_train."
+            )
+
+        # Validate feature scaling
+        train_means = X_train.mean()
+        train_stds = X_train.std()
+
+        mean_close_to_zero = np.allclose(train_means, 0, atol=1e-6)
+        std_close_to_one = np.allclose(train_stds, 1, atol=1e-3)
+
+        if not mean_close_to_zero:
+            self.logger.warning(
+                f"Training features not properly centered. Mean range: [{train_means.min():.6f}, {train_means.max():.6f}]"
+            )
+        if not std_close_to_one:
+            self.logger.warning(
+                f"Training features not properly scaled. Std range: [{train_stds.min():.6f}, {train_stds.max():.6f}]"
+            )
+
+        if mean_close_to_zero and std_close_to_one:
+            self.logger.info(
+                "Feature scaling validation passed: features are properly standardized"
             )
 
     def _display_game_summary_table(
@@ -392,28 +599,20 @@ class ModelPipeline(LoggerMixin):
             self._print_subheader(
                 f"Feature Importance Analysis for {game_id}: No data available"
             )
-            self.logger.info(
-                f"Feature Importance Analysis for {game_id}: No data available"
-            )
             return
 
         self._print_subheader(f"Feature Importance Analysis for {game_id}")
 
         for model_name, importance_dict in feature_importance_dict.items():
             if not importance_dict:
-                self.logger.info(
-                    f"No feature importance data for {model_name} in {game_id}."
-                )
                 continue
 
-            self.logger.info(f"{model_name} - Top 5 Most Important Features:")
             print(f"\n{model_name} - Top 5 Most Important Features:")
             sorted_features = sorted(
                 importance_dict.items(), key=lambda x: x[1], reverse=True
             )[:5]
 
             for i, (feature, importance) in enumerate(sorted_features, 1):
-                self.logger.info(f"  {i}. {feature}: {importance:.4f}")
                 print(f"  {i}. {feature}: {importance:.4f}")
 
     def _display_overall_best_models(self):
@@ -445,7 +644,6 @@ class ModelPipeline(LoggerMixin):
 
         metrics_to_check = ["accuracy", "precision", "recall", "f1_score", "roc_auc"]
 
-        self.logger.info("Best Performing Models by Metric:")
         print("Best Performing Models by Metric:")
         print("-" * 60)
 
@@ -453,19 +651,12 @@ class ModelPipeline(LoggerMixin):
             valid_results = [r for r in all_results if not pd.isna(r[metric])]
             if valid_results:
                 best_result = max(valid_results, key=lambda x: x[metric])
-                self.logger.info(
-                    f"{metric.upper():>10}: {best_result['model']} on {best_result['game']} ({best_result[metric]:.4f})"
-                )
                 print(
                     f"{metric.upper():>10}: {best_result['model']} on {best_result['game']} ({best_result[metric]:.4f})"
                 )
             else:
-                self.logger.info(f"{metric.upper():>10}: No valid data")
                 print(f"{metric.upper():>10}: No valid data")
 
-        self.logger.info(f"\n{'='*60}")
-        self.logger.info("OVERALL RANKING BY F1-SCORE:")
-        self.logger.info(f"{'='*60}")
         print(f"\n{'='*60}")
         print("OVERALL RANKING BY F1-SCORE:")
         print(f"{'='*60}")
@@ -506,7 +697,6 @@ class ModelPipeline(LoggerMixin):
         """
         self._print_header(f"Processing Game: {game_id}")
 
-        # Load data
         feature_file_ds1 = self.features_dir / f"{game_id}_DS1_features.csv"
         feature_file_ds2 = self.features_dir / f"{game_id}_DS2_features.csv"
 
@@ -516,20 +706,17 @@ class ModelPipeline(LoggerMixin):
         df_train = self._load_features(feature_file_ds1)
         df_eval = self._load_features(feature_file_ds2)
 
-        # Validate data loading
         if not self._validate_data_loading(
             game_id, df_train, df_eval, feature_file_ds1, feature_file_ds2
         ):
             return
 
-        # Prepare data
         prepared_data = self._prepare_game_data(game_id, df_train, df_eval)
         if prepared_data is None:
             return
 
         X_train_raw, y_train, X_eval_raw, y_eval, feature_names = prepared_data
 
-        # Scale features
         scaled_data = self._scale_features(
             game_id, X_train_raw, X_eval_raw, y_train, y_eval, feature_names
         )
@@ -539,12 +726,10 @@ class ModelPipeline(LoggerMixin):
         X_train, X_eval = scaled_data
         self._perform_data_inspection(X_train, X_eval, game_id)
 
-        # Train and evaluate models
         current_game_metrics, current_game_feature_importance = (
             self._train_and_evaluate_models(game_id, X_train, y_train, X_eval, y_eval)
         )
 
-        # Store results and display summaries
         self.all_game_metrics[game_id] = current_game_metrics
         self.all_feature_importance[game_id] = current_game_feature_importance
 
@@ -632,7 +817,6 @@ class ModelPipeline(LoggerMixin):
 
         X_eval_raw, y_eval, eval_feature_names = prepared_eval_data
 
-        # Find common features
         common_features = list(set(train_feature_names) & set(eval_feature_names))
         if not common_features:
             self.logger.error(
@@ -654,7 +838,6 @@ class ModelPipeline(LoggerMixin):
         self.logger.info(
             f"  Evaluation: {X_eval_raw.shape[0]} samples, {len(feature_names)} features"
         )
-        self.logger.info(f"  Common features: {', '.join(feature_names)}")
 
         if X_train_raw.empty or y_train.empty or X_eval_raw.empty or y_eval.empty:
             self.logger.error(
@@ -665,11 +848,16 @@ class ModelPipeline(LoggerMixin):
             }
             return None
 
+        # Log class distribution
+        train_churn_rate = y_train.value_counts(normalize=True).get(1, 0)
+        eval_churn_rate = y_eval.value_counts(normalize=True).get(1, 0)
+        self.logger.info(f"Class distribution in training set for {game_id}:")
         self.logger.info(
-            f"Class distribution in training set for {game_id}:\n{y_train.value_counts(normalize=True).apply(lambda x: f'{x:.2%}')}"
+            f"churned\n1    {train_churn_rate:.2%}\n0     {1-train_churn_rate:.2%}\nName: proportion, dtype: object"
         )
+        self.logger.info(f"Class distribution in evaluation set for {game_id}:")
         self.logger.info(
-            f"Class distribution in evaluation set for {game_id}:\n{y_eval.value_counts(normalize=True).apply(lambda x: f'{x:.2%}')}"
+            f"churned\n1    {eval_churn_rate:.2%}\n0     {1-eval_churn_rate:.2%}\nName: proportion, dtype: object"
         )
 
         return X_train_raw, y_train, X_eval_raw, y_eval, feature_names
@@ -731,32 +919,35 @@ class ModelPipeline(LoggerMixin):
 
     def _create_classifiers(self) -> Dict[str, BaseClassifier]:
         """
-        Creates and returns a dictionary of classifier instances.
+        Creates and returns a dictionary of classifier instances using settings-based configuration.
 
         Returns:
             Dict[str, BaseClassifier]: Dictionary of classifier instances.
         """
-        return {
-            "DecisionTree": DecisionTreeClassifier(
-                model_params={"random_state": self.settings.random_seed}
-            ),
-            "LogisticRegression": LogisticRegressionClassifier(
-                model_params={
-                    "random_state": self.settings.random_seed,
-                    "solver": "saga",
-                    "penalty": "l2",
-                    "max_iter": 5000,
-                    "C": 0.1,
-                    "tol": 1e-3,
-                },
-            ),
-            "RandomForest": RandomForestClassifier(
-                model_params={
-                    "random_state": self.settings.random_seed,
-                    "n_estimators": 100,
-                },
-            ),
-        }
+        classifiers = {}
+
+        for model_name in self.config_manager.list_available_models():
+            model_params = self.config_manager.get_model_params(model_name)
+
+            if model_name == "DecisionTree":
+                classifiers[model_name] = DecisionTreeClassifier(
+                    model_params=model_params, settings=self.settings
+                )
+            elif model_name == "LogisticRegression":
+                classifiers[model_name] = LogisticRegressionClassifier(
+                    model_params=model_params, settings=self.settings
+                )
+            elif model_name == "RandomForest":
+                classifiers[model_name] = RandomForestClassifier(
+                    model_params=model_params, settings=self.settings
+                )
+            else:
+                self.logger.warning(f"Unknown model type: {model_name}")
+
+        self.logger.info(
+            f"Created {len(classifiers)} classifiers: {list(classifiers.keys())}"
+        )
+        return classifiers
 
     def _train_and_evaluate_models(
         self,
@@ -786,9 +977,9 @@ class ModelPipeline(LoggerMixin):
         for model_name, classifier_instance in classifiers_to_run.items():
             self.logger.info(f"Training {model_name} for {game_id}...")
             try:
-                classifier_instance.train(X_train, y_train)
+                classifier_instance._validate_and_train(X_train, y_train)
 
-                metrics = classifier_instance.evaluate(X_eval, y_eval)
+                metrics = classifier_instance._validate_and_evaluate(X_eval, y_eval)
                 current_game_metrics[model_name] = metrics
 
                 feature_importance = classifier_instance.get_feature_importance()
