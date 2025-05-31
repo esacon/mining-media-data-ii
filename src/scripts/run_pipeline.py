@@ -1,10 +1,11 @@
 import argparse
 import sys
 from pathlib import Path
+from typing import Tuple
 
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from src.config import get_settings
+from src.config import Settings, get_settings
 from src.data_processing import DataPipeline
 from src.models.model_pipeline import ModelPipeline
 
@@ -101,7 +102,9 @@ def apply_overrides(settings, args: argparse.Namespace) -> None:
 
 
 def run_pipeline_steps(
-    data_pipeline: DataPipeline, model_pipeline: ModelPipeline, args: argparse.Namespace
+    args: argparse.Namespace,
+    data_pipeline: DataPipeline = None,
+    model_pipeline: ModelPipeline = None,
 ) -> None:
     """Run appropriate pipeline steps based on arguments."""
     if args.prep_only:
@@ -128,6 +131,48 @@ def run_pipeline_steps(
         model_pipeline.run_pipeline()
 
 
+def _initialize_pipelines(
+    settings: Settings, args: argparse.Namespace
+) -> Tuple[DataPipeline, ModelPipeline]:
+    """Initialize pipelines based on what's needed."""
+    data_pipeline = None
+    model_pipeline = None
+
+    if (
+        args.prep_only
+        or args.create_only
+        or args.features_only
+        or args.data_only
+        or (
+            not any(
+                [
+                    args.prep_only,
+                    args.create_only,
+                    args.features_only,
+                    args.models_only,
+                    args.data_only,
+                ]
+            )
+        )
+    ):
+        data_pipeline = DataPipeline(settings)
+
+    if args.models_only or (
+        not any(
+            [
+                args.prep_only,
+                args.create_only,
+                args.features_only,
+                args.models_only,
+                args.data_only,
+            ]
+        )
+    ):
+        model_pipeline = ModelPipeline(settings)
+
+    return data_pipeline, model_pipeline
+
+
 def main() -> None:
     """Main function to load settings, initialize, and run the data and model pipelines."""
     try:
@@ -138,12 +183,10 @@ def main() -> None:
         apply_overrides(settings, args)
         settings.__post_init__()
 
-        # Initialize pipelines
-        data_pipeline = DataPipeline(settings)
-        model_pipeline = ModelPipeline(settings)
+        data_pipeline, model_pipeline = _initialize_pipelines(settings, args)
 
         # Run appropriate pipeline steps
-        run_pipeline_steps(data_pipeline, model_pipeline, args)
+        run_pipeline_steps(args, data_pipeline, model_pipeline)
 
         print("\n🎉 Pipeline execution completed successfully!")
 
