@@ -33,9 +33,9 @@ def setup_logger(
     log_level_int = getattr(logging, level_str.upper(), logging.INFO)
     logger.setLevel(log_level_int)
 
-    # Clear existing handlers to avoid duplicate logs if called multiple times on the same logger
-    if logger.hasHandlers():
-        logger.handlers.clear()
+    # Clear direct handlers to avoid duplicate logs if called multiple times on the same logger
+    for handler in list(logger.handlers):
+        logger.removeHandler(handler)
 
     current_format_string = format_string if format_string is not None else DEFAULT_LOG_FORMAT
     formatter = logging.Formatter(current_format_string)
