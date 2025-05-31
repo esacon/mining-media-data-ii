@@ -26,10 +26,6 @@ class BaseClassifier(ABC, LoggerMixin):
         self.model_params = model_params if model_params is not None else {}
         self.model = None
 
-        self.logger.debug(
-            f"BaseClassifier initialized for {self.__class__.__name__} with params: {self.model_params}"
-        )
-
     @abstractmethod
     def train(self, X_train: pd.DataFrame, y_train: pd.Series) -> None:
         """
@@ -103,20 +99,15 @@ class BaseClassifier(ABC, LoggerMixin):
         if self.model:
             try:
                 model_path = Path(path)
+                if not model_path.is_absolute() and "results" not in str(model_path):
+                    model_path = Path("results") / "models" / model_path.name
                 model_path.parent.mkdir(parents=True, exist_ok=True)
                 joblib.dump(self.model, model_path)
-                self.logger.info(
-                    f"Model for {self.__class__.__name__} saved to {model_path}"
-                )
+                self.logger.info(f"Model saved to {model_path}")
             except Exception as e:
-                self.logger.error(
-                    f"Error saving model for {self.__class__.__name__} to {path}: {e}",
-                    exc_info=True,
-                )
+                self.logger.error(f"Error saving model to {path}: {e}")
         else:
-            self.logger.warning(
-                f"No model to save for {self.__class__.__name__}. Train the model first."
-            )
+            self.logger.warning("No model to save. Train the model first.")
 
     def load_model(self, path: Union[str, Path]) -> None:
         """
@@ -128,17 +119,9 @@ class BaseClassifier(ABC, LoggerMixin):
         try:
             model_path = Path(path)
             if not model_path.exists():
-                error_msg = f"Model file not found at {model_path} for {self.__class__.__name__}."
-                self.logger.error(error_msg)
-                raise FileNotFoundError(error_msg)
-
+                raise FileNotFoundError(f"Model file not found at {model_path}")
             self.model = joblib.load(model_path)
-            self.logger.info(
-                f"Model for {self.__class__.__name__} loaded from {model_path}"
-            )
+            self.logger.info(f"Model loaded from {model_path}")
         except Exception as e:
-            self.logger.error(
-                f"Error loading model for {self.__class__.__name__} from {path}: {e}",
-                exc_info=True,
-            )
+            self.logger.error(f"Error loading model from {path}: {e}")
             self.model = None

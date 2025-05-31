@@ -29,17 +29,14 @@ class ModelPipeline(LoggerMixin):
         self.processed_dir = settings.processed_dir
         self.results_dir = settings.results_dir
         self.features_dir = self.results_dir / "features"
-        self.models_output_dir = self.processed_dir / "models"
+        self.models_output_dir = self.results_dir / "models"
 
         self.results_dir.mkdir(parents=True, exist_ok=True)
         self.models_output_dir.mkdir(parents=True, exist_ok=True)
 
         self.logger.info("ModelPipeline initialized.")
-        self.logger.info(f"  Processed data directory: {self.processed_dir}")
-        self.logger.info(f"  Features directory: {self.features_dir}")
-        self.logger.info(f"  Models output directory: {self.models_output_dir}")
-        self.logger.info(f"  Results directory: {self.results_dir}")
-        self.logger.info(f"  Random seed: {self.settings.random_seed}")
+        self.logger.info(f"Results directory: {self.results_dir}")
+        self.logger.info(f"Models output directory: {self.models_output_dir}")
 
         self.all_game_metrics: Dict[str, Dict[str, Dict[str, float]]] = {}
         self.all_feature_importance: Dict[str, Dict[str, Dict[str, float]]] = {}
@@ -76,7 +73,6 @@ class ModelPipeline(LoggerMixin):
         Returns:
             Optional[pd.DataFrame]: The loaded DataFrame, or None if an error occurs.
         """
-        self.logger.info(f"Attempting to load features from: {feature_file_path}")
         try:
             df = pd.read_csv(feature_file_path)
             for col in df.columns:
@@ -89,17 +85,13 @@ class ModelPipeline(LoggerMixin):
                 ]:
                     df[col] = pd.to_numeric(df[col], errors="coerce")
 
-            self.logger.info(
-                f"Successfully loaded {len(df)} records with {len(df.columns)} columns from {feature_file_path}."
-            )
+            self.logger.info(f"Loaded {len(df)} records with {len(df.columns)} columns")
             return df
         except FileNotFoundError:
             self.logger.error(f"Feature file not found at {feature_file_path}")
             return None
         except Exception as e:
-            self.logger.error(
-                f"Error loading feature file {feature_file_path}: {e}", exc_info=True
-            )
+            self.logger.error(f"Error loading feature file {feature_file_path}: {e}")
             return None
 
     def _validate_and_convert_target(
@@ -118,19 +110,19 @@ class ModelPipeline(LoggerMixin):
         """
         if target_column not in df.columns:
             self.logger.error(
-                f"Target column '{target_column}' not found in DataFrame for {game_id}."
+                f"Target column '{target_column}' not found for {game_id}"
             )
             return None
 
         if df[target_column].isnull().any():
             nan_count = df[target_column].isnull().sum()
             self.logger.warning(
-                f"Target column '{target_column}' contains {nan_count} NaN values. Dropping these rows."
+                f"Target column contains {nan_count} NaN values. Dropping these rows."
             )
             df.dropna(subset=[target_column], inplace=True)
             if df.empty:
                 self.logger.error(
-                    f"DataFrame empty after dropping NaN targets for {game_id}."
+                    f"DataFrame empty after dropping NaN targets for {game_id}"
                 )
                 return None
 
@@ -154,14 +146,8 @@ class ModelPipeline(LoggerMixin):
 
             if df[target_column].isnull().any():
                 raise ValueError("Mapping to boolean resulted in NaNs.")
-            self.logger.info(
-                f"Target column '{target_column}' successfully converted to boolean."
-            )
         except Exception as e:
-            self.logger.error(
-                f"Failed to convert target '{target_column}' to boolean for {game_id}: {e}",
-                exc_info=True,
-            )
+            self.logger.error(f"Failed to convert target to boolean for {game_id}: {e}")
             return None
 
         return df[target_column].astype(int)
@@ -182,24 +168,18 @@ class ModelPipeline(LoggerMixin):
 
         for col in X.columns:
             if not pd.api.types.is_numeric_dtype(X[col]):
-                self.logger.warning(
-                    f"Feature column '{col}' for {game_id} is non-numeric (dtype: {X[col].dtype}). Coercing to numeric."
-                )
                 X[col] = pd.to_numeric(X[col], errors="coerce")
 
         if X.isnull().values.any():
             nan_counts = X.isnull().sum()
             nan_cols = nan_counts[nan_counts > 0].index
             self.logger.warning(
-                f"NaN values found in feature columns for {game_id}: {list(nan_cols)}. Imputing with column medians."
+                f"NaN values found in feature columns for {game_id}: {list(nan_cols)}"
             )
             for col in nan_cols:
                 median_val = X[col].median()
                 X[col].fillna(median_val, inplace=True)
                 if X[col].isnull().any():
-                    self.logger.warning(
-                        f"Column '{col}' still has NaNs for {game_id} after median. Filling with 0."
-                    )
                     X[col].fillna(0, inplace=True)
         return X
 
@@ -219,14 +199,12 @@ class ModelPipeline(LoggerMixin):
         constant_cols = [col for col in X.columns if X[col].nunique() <= 1]
         if constant_cols:
             self.logger.warning(
-                f"Constant columns found for {game_id} AFTER cleaning and BEFORE scaling: {constant_cols}. Dropping them."
+                f"Constant columns found for {game_id}: {constant_cols}. Dropping them."
             )
             X = X.drop(columns=constant_cols)
         feature_columns = list(X.columns)
         if not feature_columns:
-            self.logger.error(
-                f"No feature columns remaining for {game_id} after dropping constant columns."
-            )
+            self.logger.error(f"No feature columns remaining for {game_id}")
         return X, feature_columns
 
     def _prepare_data_for_model(
@@ -244,53 +222,20 @@ class ModelPipeline(LoggerMixin):
             Optional[Tuple[pd.DataFrame, pd.Series, List[str]]]: A tuple of (features, target, feature_names),
                                                                   or None if preparation fails.
         """
-        self.logger.info(f"Preparing data for modeling: {game_id}")
-
         y = self._validate_and_convert_target(df, target_column, game_id)
         if y is None:
             return None
 
-        X = df.copy()
-
-        features_to_drop_game1 = ["purchase_count", "max_purchase"]
-        if game_id.startswith("game1"):
-            actual_cols_to_drop = [
-                col for col in features_to_drop_game1 if col in X.columns
-            ]
-            if actual_cols_to_drop:
-                X = X.drop(columns=actual_cols_to_drop)
-                self.logger.info(
-                    f"For {game_id}, dropped game-specific columns: {actual_cols_to_drop}"
-                )
-
-        base_features_to_drop = [
-            "player_id",
-            target_column,
-            "op_start",
-            "op_end",
-            "cp_start",
-            "cp_end",
-            "op_event_count",
-        ]
-        actual_base_cols_to_drop = [
-            col for col in base_features_to_drop if col in X.columns
-        ]
-        if actual_base_cols_to_drop:
-            X = X.drop(columns=actual_base_cols_to_drop)
-            self.logger.info(
-                f"Dropped general ID/metadata/target columns for {game_id}: {actual_base_cols_to_drop}"
-            )
-
+        feature_columns = [col for col in df.columns if col != target_column]
+        X = df[feature_columns].copy()
         X = self._clean_feature_columns(X, game_id)
-        X, feature_columns = self._remove_constant_columns(X, game_id)
+        X, feature_names = self._remove_constant_columns(X, game_id)
 
-        if not feature_columns:
+        if not feature_names:
             return None
 
-        self.logger.info(
-            f"Final prepared X shape for {game_id}: {X.shape}, y shape: {y.shape}"
-        )
-        return X, y, feature_columns
+        y = y.loc[X.index]
+        return X, y, feature_names
 
     def _perform_data_inspection(
         self, X_train: pd.DataFrame, X_test: pd.DataFrame, game_id: str
@@ -752,9 +697,6 @@ class ModelPipeline(LoggerMixin):
         Returns:
             Optional[Tuple[pd.DataFrame, pd.DataFrame]]: Scaled training and evaluation features or None if scaling fails.
         """
-        self.logger.info(
-            f"Applying Feature Scaling (StandardScaler) for {game_id} on {len(feature_names)} features..."
-        )
         scaler = StandardScaler()
         X_train_scaled_np = scaler.fit_transform(X_train_raw)
         X_eval_scaled_np = scaler.transform(X_eval_raw)
@@ -765,12 +707,10 @@ class ModelPipeline(LoggerMixin):
         X_eval = pd.DataFrame(
             X_eval_scaled_np, columns=feature_names, index=X_eval_raw.index
         )
-        self.logger.info("Feature scaling completed.")
 
-        # Validate scaled data
         if X_train.isnull().values.any() or np.isinf(X_train.values).any():
             self.logger.critical(
-                f"CRITICAL ERROR: NaNs or Infs found in training data AFTER scaling for {game_id}. Skipping game."
+                f"NaNs or Infs found in training data after scaling for {game_id}"
             )
             self.all_game_metrics[game_id] = {
                 "error": "NaNs/Infs in training data after scaling"
@@ -779,17 +719,14 @@ class ModelPipeline(LoggerMixin):
 
         if X_eval.isnull().values.any() or np.isinf(X_eval.values).any():
             self.logger.critical(
-                f"CRITICAL ERROR: NaNs or Infs found in evaluation data AFTER scaling for {game_id}. Skipping game."
+                f"NaNs or Infs found in evaluation data after scaling for {game_id}"
             )
             self.all_game_metrics[game_id] = {
                 "error": "NaNs/Infs in evaluation data after scaling"
             }
             return None
 
-        self.logger.info(
-            f"Final data shapes for {game_id}: X_train: {X_train.shape}, y_train: {y_train.shape}, X_eval: {X_eval.shape}, y_eval: {y_eval.shape}"
-        )
-
+        self.logger.info(f"Scaled features for {game_id}: {X_train.shape[1]} features")
         return X_train, X_eval
 
     def _create_classifiers(self) -> Dict[str, BaseClassifier]:
@@ -850,9 +787,7 @@ class ModelPipeline(LoggerMixin):
             self.logger.info(f"Training {model_name} for {game_id}...")
             try:
                 classifier_instance.train(X_train, y_train)
-                self.logger.info(f"{model_name} training completed.")
 
-                self.logger.info(f"Evaluating {model_name} on DS2 for {game_id}...")
                 metrics = classifier_instance.evaluate(X_eval, y_eval)
                 current_game_metrics[model_name] = metrics
 
@@ -861,22 +796,15 @@ class ModelPipeline(LoggerMixin):
                     current_game_feature_importance[model_name] = (
                         feature_importance.to_dict()
                     )
-                    self.logger.info(f"Feature importance extracted for {model_name}")
-                else:
-                    self.logger.info(
-                        f"No feature importance available for {model_name}"
-                    )
 
                 model_save_path = (
                     self.models_output_dir / f"{game_id}_{model_name}.joblib"
                 )
                 classifier_instance.save_model(model_save_path)
-                self.logger.info(f"{model_name} model saved to: {model_save_path}")
 
             except Exception as e:
                 self.logger.error(
-                    f"Failed to train/evaluate {model_name} for {game_id}: {e}",
-                    exc_info=True,
+                    f"Failed to train/evaluate {model_name} for {game_id}: {e}"
                 )
                 current_game_metrics[model_name] = {"error": str(e)}
 
