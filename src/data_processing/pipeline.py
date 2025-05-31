@@ -1,11 +1,14 @@
 import time
-from typing import Any, Dict
+import numpy as np
+import json
+from typing import Any, Dict, Optional, List
+from datetime import datetime
 
 from src.config import Settings
 from src.data_processing.data_preparation import DataPreparation
 from src.data_processing.dataset_creation import DatasetCreator
 from src.utils import LoggerMixin, format_duration, save_json, setup_logger
-
+from src.data_processing.feature_engineering import FeatureEngineering
 
 class DataPipeline(LoggerMixin):
     """Orchestrates the complete data processing pipeline, including data preparation
@@ -41,6 +44,7 @@ class DataPipeline(LoggerMixin):
         # Initialize data preparation and dataset creation components
         self.data_prep = DataPreparation(settings)
         self.dataset_creator = DatasetCreator(settings)
+        self.feature_engineering = FeatureEngineering(self.output_dir, self.settings, self.logger)
 
     def run_preparation(self) -> Dict[str, Any]:
         """Runs the data preparation step of the pipeline.
@@ -153,11 +157,15 @@ class DataPipeline(LoggerMixin):
         pipeline_start = time.time()
 
         try:
+            creation_step = None
+            
             prep_step = self.run_preparation()
 
             creation_step = self.run_dataset_creation()
-
-            self.print_summary(creation_step["results"])
+            
+            feature_step = self.feature_engineering.run_feature_extraction(creation_step)
+            
+            self.print_summary(feature_step["results"])
 
             total_time = time.time() - pipeline_start
             self.logger.info(
