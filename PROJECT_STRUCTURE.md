@@ -1,6 +1,6 @@
 # Project Structure
 
-This document outlines the streamlined structure of the churn prediction project, designed for simplicity and maintainability.
+This document outlines the comprehensive structure of the churn prediction project, including both data processing and machine learning pipelines.
 
 ## Directory Structure
 
@@ -14,11 +14,18 @@ project-1/
 │   │   ├── file_utils.py             # File operations
 │   │   ├── time_utils.py             # Time/timestamp utilities
 │   │   └── data_utils.py             # Data processing utilities
-│   ├── data_processing/              # Main data pipeline
+│   ├── data_processing/              # Data pipeline
 │   │   ├── data_preparation.py       # CSV→JSONL conversion & splitting
 │   │   ├── dataset_creation.py       # Observation/churn labeling
 │   │   ├── feature_engineering.py    # Kim et al. (2017) features
 │   │   └── pipeline.py               # Pipeline orchestrator
+│   ├── models/                       # Machine learning pipeline
+│   │   ├── base_classifier.py        # Abstract base classifier
+│   │   ├── decision_tree_classifier.py     # Decision Tree implementation
+│   │   ├── logistic_regression_classifier.py # Logistic Regression implementation
+│   │   ├── random_forest_classifier.py     # Random Forest implementation
+│   │   ├── model_config.py           # Model configuration management
+│   │   └── model_pipeline.py         # ML pipeline orchestrator
 │   ├── scripts/                      # Executable scripts
 │   │   ├── run_pipeline.py           # Main pipeline runner
 │   │   └── inspect_datasets.py       # Dataset inspection
@@ -26,7 +33,11 @@ project-1/
 │       ├── dataset_game1/            # Game 1 raw data
 │       ├── dataset_game2/            # Game 2 raw data
 │       └── processed/                # Generated datasets
-├── results/features/                 # Extracted feature CSV files
+├── results/                          # All output files
+│   ├── features/                     # Extracted feature CSV files
+│   ├── models/                       # Trained model files (.joblib)
+│   ├── feature_importance.json       # Feature importance rankings
+│   └── model_evaluation_metrics.json # Model performance metrics
 ├── logs/                             # Log files
 ├── config.yaml                       # Main configuration
 └── requirements.txt                  # Dependencies
@@ -62,7 +73,7 @@ The pipeline follows a simple 3-step process:
   - Generates ML-ready CSV files
 
 #### 4. **Pipeline Orchestrator** (`pipeline.py`)
-- **Purpose**: Coordinates the complete pipeline
+- **Purpose**: Coordinates the complete data pipeline
 - **Key Features**:
   - Manages step execution with timing
   - Handles logging and error reporting
@@ -78,7 +89,7 @@ Centralized configuration management with YAML support:
 
 ### Utilities (`src/utils/`)
 
-Reusable functions supporting the pipeline:
+Reusable functions supporting both pipelines:
 - **Logging**: Consistent logging across all modules
 - **File Operations**: Reading, writing, and path management
 - **Time Handling**: Timestamp conversion and boundary calculations
@@ -100,17 +111,6 @@ python src/scripts/run_pipeline.py --create-only
 python src/scripts/run_pipeline.py --features-only
 ```
 
-### Programmatic Usage
-```python
-from src.config import get_settings
-from src.data_processing import DataPipeline
-
-# Load settings and run pipeline
-settings = get_settings()
-pipeline = DataPipeline(settings)
-pipeline.run_full_pipeline()
-```
-
 ## Configuration System
 
 ### YAML Configuration (`config.yaml`)
@@ -119,6 +119,19 @@ data_processing:
   observation_days: 5          # Observation period
   churn_period_days: 10        # Churn prediction period
   train_ratio: 0.8             # Train/eval split
+
+models:
+  decision_tree:
+    max_depth: 10
+    min_samples_split: 20
+    random_state: 42
+  random_forest:
+    n_estimators: 100
+    max_depth: 10
+    random_state: 42
+  logistic_regression:
+    max_iter: 1000
+    random_state: 42
 
 paths:
   data_dir: "src/data"
@@ -186,3 +199,15 @@ The pipeline generates the following files:
 - `results/features/game1_DS2_features.csv` - Game 1 evaluation features
 - `results/features/game2_DS1_features.csv` - Game 2 training features
 - `results/features/game2_DS2_features.csv` - Game 2 evaluation features
+
+### Trained Models
+- `results/models/game1_DecisionTree.joblib` - Game 1 Decision Tree model
+- `results/models/game1_RandomForest.joblib` - Game 1 Random Forest model
+- `results/models/game1_LogisticRegression.joblib` - Game 1 Logistic Regression model
+- `results/models/game2_DecisionTree.joblib` - Game 2 Decision Tree model
+- `results/models/game2_RandomForest.joblib` - Game 2 Random Forest model
+- `results/models/game2_LogisticRegression.joblib` - Game 2 Logistic Regression model
+
+### Analysis Results
+- `results/model_evaluation_metrics.json` - Complete performance metrics for all models
+- `results/feature_importance.json` - Feature importance rankings across all models

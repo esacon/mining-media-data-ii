@@ -34,7 +34,7 @@ class DataPipeline(LoggerMixin):
 
         self._logger = setup_logger(
             name=self.__class__.__name__,
-            level=self.settings.log_level,
+            level_str=self.settings.log_level,
             log_file=log_file_path,
             format_string=self.settings.log_format,
         )

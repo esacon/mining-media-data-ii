@@ -1,6 +1,6 @@
 import statistics
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Union
 
@@ -163,47 +163,23 @@ class FeatureEngineering(LoggerMixin):
         }
 
     def extract_common_features(
-        self, all_records: List[Dict], game_name: str = "game1"
+        self, observation_records: List[Dict], game_name: str = "game1"
     ) -> Dict[str, Any]:
         """
         Extracts the 10 common behavioral features from Kim et al. (2017).
-        Filters records based on the observation period relative to the first play.
+        Uses pre-filtered observation records from dataset creation.
 
         Args:
-            all_records (List[Dict]): A list of dictionaries containing game events.
+            observation_records (List[Dict]): Pre-filtered events from observation period.
             game_name (str): The name of the game.
 
         Returns:
             Dict[str, Any]: A dictionary containing the extracted features.
         """
-        if not all_records:
+        if not observation_records:
             return self._get_empty_features(game_name)
 
         try:
-            sorted_records = sorted(all_records, key=lambda x: x.get("time", 0))
-            if not sorted_records:
-                return self._get_empty_features(game_name)
-
-            first_play_timestamp = sorted_records[0].get("time")
-            if first_play_timestamp is None:
-                self.logger.warning("First play timestamp not found in records.")
-                return self._get_empty_features(game_name)
-
-            first_play_datetime = convert_timestamp(first_play_timestamp, "datetime")
-            observation_end_datetime = first_play_datetime + timedelta(
-                days=self.observation_days
-            )
-
-            observation_records = [
-                r
-                for r in sorted_records
-                if convert_timestamp(r.get("time", 0), "datetime")
-                < observation_end_datetime
-            ]
-
-            if not observation_records:
-                return self._get_empty_features(game_name)
-
             events_data = self._extract_game_events(observation_records, game_name)
             if not events_data["valid_events"]:
                 return self._get_empty_features(game_name)
@@ -266,6 +242,43 @@ class FeatureEngineering(LoggerMixin):
             self.logger.warning(f"Error extracting Game 2 features: {e}")
             return {"purchaseCount": 0, "highestPrice": 0.0}
 
+    def _validate_player_data(self, player_data: Dict) -> tuple[str, bool, List[Dict]]:
+        """Extract and validate core player data."""
+        player_id = player_data.get("player_id")
+        churned = player_data.get("churned", False)
+        observation_records = player_data.get("observation_records", [])
+
+        if not player_id or not isinstance(observation_records, list):
+            return None, None, None
+
+        # Validate using metadata if available
+        expected_count = player_data.get("op_event_count")
+        if expected_count is not None and len(observation_records) != expected_count:
+            self.logger.warning(
+                f"Player {player_id}: observation record count mismatch. "
+                f"Expected: {expected_count}, Got: {len(observation_records)}"
+            )
+
+        return player_id, churned, observation_records
+
+    def _detect_game_type(self, observation_records: List[Dict]) -> str:
+        """Auto-detect game type from observation records."""
+        for record in observation_records[:10]:
+            if (
+                record.get("event") == "progress"
+                and record.get("properties", {}).get("type") == "race"
+            ):
+                return "game2"
+        return "game1"
+
+    def _add_metadata_to_features(self, feature_row: Dict, player_data: Dict) -> Dict:
+        """Add metadata fields to feature row if available."""
+        metadata_fields = ["op_start", "op_end", "op_event_count"]
+        for field in metadata_fields:
+            if field in player_data:
+                feature_row[field] = player_data[field]
+        return feature_row
+
     def calculate_features(
         self, player_data: Dict, game_name: str = None
     ) -> Union[Dict[str, Any], None]:
@@ -280,33 +293,27 @@ class FeatureEngineering(LoggerMixin):
             Union[Dict[str, Any], None]: A dictionary containing the extracted features or None if an error occurs.
         """
         try:
-            player_id = player_data.get("player_id")
-            churned = player_data.get("churned", False)
-            all_records = player_data.get("observation_records", [])
-
-            if not player_id or not isinstance(all_records, list):
+            player_id, churned, observation_records = self._validate_player_data(
+                player_data
+            )
+            if player_id is None:
                 return None
 
             if game_name is None:
-                game_name = "game1"
-                for record in all_records[:10]:
-                    if (
-                        record.get("event") == "progress"
-                        and record.get("properties", {}).get("type") == "race"
-                    ):
-                        game_name = "game2"
-                        break
+                game_name = self._detect_game_type(observation_records)
 
             feature_row = {
                 "player_id": player_id,
                 "churned": int(churned),
-                **self.extract_common_features(all_records, game_name),
+                **self.extract_common_features(observation_records, game_name),
             }
 
             if game_name == "game2":
-                feature_row.update(self.extract_game2_specific_features(all_records))
+                feature_row.update(
+                    self.extract_game2_specific_features(observation_records)
+                )
 
-            return feature_row
+            return self._add_metadata_to_features(feature_row, player_data)
         except Exception as e:
             self.logger.warning(f"Error processing player: {e}")
             return None
@@ -513,7 +520,14 @@ class FeatureEngineering(LoggerMixin):
         if missing_cols:
             raise ValueError(f"Missing required columns: {missing_cols}")
 
-        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        metadata_cols = ["op_start", "op_end", "op_event_count"]
+        feature_cols = [
+            col
+            for col in df.columns
+            if col not in ["player_id", "churned"] + metadata_cols
+        ]
+        numeric_cols = df[feature_cols].select_dtypes(include=[np.number]).columns
+
         inf_counts = df[numeric_cols].isin([np.inf, -np.inf]).sum()
         nan_counts = df[numeric_cols].isna().sum()
 
@@ -529,12 +543,24 @@ class FeatureEngineering(LoggerMixin):
             )
             df[numeric_cols] = df[numeric_cols].fillna(0)
 
+        if "op_event_count" in df.columns:
+            gameplay_events = df["playCount"].sum()
+            total_events = df["op_event_count"].sum()
+            gameplay_ratio = gameplay_events / total_events if total_events > 0 else 0
+
+            self.logger.info(
+                f"Event breakdown: {gameplay_events:,} gameplay events from "
+                f"{total_events:,} total telemetry events ({gameplay_ratio:.1%} ratio)"
+            )
+
         churn_rate = df["churned"].mean()
-        feature_count = len(df.columns) - 2
+        feature_count = len(feature_cols)
         expected_features = 10 + (2 if game_name == "game2" else 0)
 
         self.logger.info(
             f"Validated: {len(df)} players, {feature_count} features "
             f"(expected: {expected_features}), {churn_rate:.1%} churn rate"
         )
-        return df
+
+        essential_cols = ["player_id", "churned"] + [col for col in feature_cols]
+        return df[essential_cols]

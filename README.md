@@ -1,16 +1,10 @@
 # Telemetry-Based Churn Prediction in Mobile Racing Games
 
-A streamlined data processing pipeline for predicting player churn in freemium mobile racing games using telemetry data and behavioral features from Kim et al. (2017).
+A complete machine learning pipeline for predicting player churn in freemium mobile racing games using telemetry data and behavioral features from Kim et al. (2017).
 
 ## 🎯 Overview
 
-This project analyzes player behavior patterns to predict which players will stop playing (churn) within a 10-day period after observing their activity for 5 days. It implements a complete data processing pipeline from raw telemetry data to ML-ready features.
-
-### What it does:
-1. **Processes** raw game telemetry data from two mobile racing games
-2. **Creates** labeled datasets with observation and churn periods
-3. **Extracts** behavioral features based on research methodology
-4. **Generates** ML-ready CSV files for churn prediction models
+This project analyzes player behavior patterns to predict which players will stop playing (churn) within a 10-day period after observing their activity for 5 days. It implements a complete end-to-end pipeline from raw telemetry data to trained ML models with comprehensive evaluation.
 
 ---
 
@@ -41,14 +35,26 @@ python src/scripts/run_pipeline.py
 project-1/
 ├── src/
 │   ├── config/settings.py           # Configuration management
-│   ├── data_processing/             # Main pipeline
+│   ├── data_processing/             # Data pipeline
 │   │   ├── data_preparation.py      # Convert & split data
 │   │   ├── dataset_creation.py      # Create labeled datasets
 │   │   ├── feature_engineering.py   # Extract features
 │   │   └── pipeline.py              # Orchestrate everything
-│   ├── scripts/run_pipeline.py      # Main entry point
+│   ├── models/                      # ML pipeline
+│   │   ├── base_classifier.py       # Abstract base classifier
+│   │   ├── decision_tree_classifier.py     # Decision Tree implementation
+│   │   ├── logistic_regression_classifier.py # Logistic Regression implementation
+│   │   ├── random_forest_classifier.py     # Random Forest implementation
+│   │   ├── model_config.py          # Model configuration management
+│   │   └── model_pipeline.py        # ML pipeline orchestrator
+│   ├── scripts/
+│   │   ├── run_pipeline.py          # Complete pipeline runner
 │   └── utils/                       # Helper functions
-├── results/features/                # Generated feature files
+├── results/
+│   ├── features/                    # Generated feature files
+│   ├── models/                      # Trained model files (.joblib)
+│   ├── feature_importance.json      # Feature importance rankings
+│   └── model_evaluation_metrics.json # Model performance metrics
 ├── config.yaml                      # Main configuration
 └── src/data/                        # Raw datasets
 ```
@@ -63,6 +69,19 @@ data_processing:
   observation_days: 5      # How long to observe players
   churn_period_days: 10    # How long to wait for churn
   train_ratio: 0.8         # 80% train, 20% evaluation
+
+models:
+  decision_tree:
+    max_depth: 10
+    min_samples_split: 20
+    random_state: 42
+  random_forest:
+    n_estimators: 100
+    max_depth: 10
+    random_state: 42
+  logistic_regression:
+    max_iter: 1000
+    random_state: 42
 
 filenames:
   game1_csv: "dataset_game1/rawdata_game1.csv"
@@ -109,15 +128,30 @@ python src/scripts/run_pipeline.py --features-only
 - **Source**: CSV format with device IDs, scores, and timestamps
 - **Features**: Play patterns and scoring behavior
 - **Players**: ~1,500 unique devices
+- **Best Model**: Logistic Regression (AUC: 79.2%, following Kim et al. 2017)
 
 ### Game 2: Racing Game with Purchases
 - **Source**: JSONL format with detailed event logs
 - **Features**: Play patterns, scoring, and purchase behavior
 - **Players**: ~27,000 unique players
+- **Best Model**: Random Forest (AUC: 73.4%, following Kim et al. 2017)
 
 ---
 
-## 📈 Features Extracted
+## 📈 Feature Importance Analysis
+
+### Top Features by Game
+
+#### Game 1 (All Models)
+1. **activeDuration** - Time span between first and last play
+2. **meanScore** / **worstScore** - Scoring patterns
+3. **bestSubMeanRatio** - Performance improvement patterns
+
+#### Game 2 (All Models)
+1. **activeDuration** - Most predictive across all models
+2. **consecutivePlayRatio** - Play consistency patterns
+3. **purchaseCount** - Monetization behavior
+4. **playCount** - Activity level
 
 ### Common Features (Both Games)
 Following Kim et al. (2017) methodology:
@@ -153,22 +187,21 @@ Following Kim et al. (2017) methodology:
 - `results/features/game2_DS1_features.csv` - Game 2 training features
 - `results/features/game2_DS2_features.csv` - Game 2 evaluation features
 
+### Trained Models
+- `results/models/game1_DecisionTree.joblib` - Game 1 Decision Tree
+- `results/models/game1_RandomForest.joblib` - Game 1 Random Forest
+- `results/models/game1_LogisticRegression.joblib` - Game 1 Logistic Regression
+- `results/models/game2_DecisionTree.joblib` - Game 2 Decision Tree
+- `results/models/game2_RandomForest.joblib` - Game 2 Random Forest
+- `results/models/game2_LogisticRegression.joblib` - Game 2 Logistic Regression
+
+### Results & Analysis
+- `results/model_evaluation_metrics.json` - Complete performance metrics
+- `results/feature_importance.json` - Feature importance rankings
+
 ---
 
 ## 🔬 Research Context
-
-### Assignment Tasks Status
-
-✅ **Completed:**
-- Data preparation and 80/20 player-based splits
-- Dataset creation with observation/churn period labeling
-- Feature engineering with Kim et al. (2017) methodology
-- CSV generation for machine learning
-
-🔄 **Next Steps:**
-- Train Decision Tree, Random Forest, and Logistic Regression classifiers
-- Evaluate models on DS2 datasets
-- Compare with LLM-based churn prediction (bonus)
 
 ### Key Research Reference
 *Kim, S., Choi, D., Lee, E., & Rhee, W. (2017). Churn prediction of mobile and online casual games using play log data. PLoS one, 12(7), e0180735.*

@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import yaml
 
@@ -32,6 +32,10 @@ class Settings:
                                      None means no limit.
         common_features (List[str]): List of common features to extract from game data.
         game2_specific_features (List[str]): List of game 2 specific features.
+        multicollinearity_threshold (float): Correlation threshold for feature removal.
+        decision_tree_params (Dict[str, Any]): Parameters for Decision Tree classifier.
+        logistic_regression_params (Dict[str, Any]): Parameters for Logistic Regression classifier.
+        random_forest_params (Dict[str, Any]): Parameters for Random Forest classifier.
     """
 
     project_root: Path = Path(__file__).parent.parent.parent
@@ -98,6 +102,45 @@ class Settings:
         ]
     )
 
+    # Model configuration
+    multicollinearity_threshold: float = 0.95
+
+    decision_tree_params: Dict[str, Any] = field(
+        default_factory=lambda: {
+            "random_state": 42,
+            "max_depth": None,
+            "min_samples_split": 2,
+            "min_samples_leaf": 1,
+            "criterion": "gini",
+            "max_features": None,
+        }
+    )
+
+    logistic_regression_params: Dict[str, Any] = field(
+        default_factory=lambda: {
+            "random_state": 42,
+            "solver": "saga",
+            "penalty": "l2",
+            "max_iter": 5000,
+            "C": 0.1,
+            "tol": 1e-3,
+        }
+    )
+
+    random_forest_params: Dict[str, Any] = field(
+        default_factory=lambda: {
+            "random_state": 42,
+            "n_estimators": 100,
+            "max_depth": None,
+            "min_samples_split": 2,
+            "min_samples_leaf": 1,
+            "max_features": "sqrt",
+            "n_jobs": -1,
+            "bootstrap": True,
+            "oob_score": True,
+        }
+    )
+
     log_level: str = "INFO"
     log_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     log_to_console: bool = True
@@ -111,6 +154,25 @@ class Settings:
         """Initialize default paths and create directories."""
         self._set_default_paths()
         self._create_directories()
+        self._process_model_params()
+
+    def _process_model_params(self) -> None:
+        """Process model parameters to handle special values like null/None."""
+        # Process decision tree parameters
+        if self.decision_tree_params.get("max_depth") == "null":
+            self.decision_tree_params["max_depth"] = None
+        if self.decision_tree_params.get("max_features") == "null":
+            self.decision_tree_params["max_features"] = None
+
+        # Process random forest parameters
+        if self.random_forest_params.get("max_depth") == "null":
+            self.random_forest_params["max_depth"] = None
+
+        # Ensure random_state is consistent across all models
+        if hasattr(self, "random_seed"):
+            self.decision_tree_params["random_state"] = self.random_seed
+            self.logistic_regression_params["random_state"] = self.random_seed
+            self.random_forest_params["random_state"] = self.random_seed
 
     def _set_default_paths(self) -> None:
         """Set default paths if not explicitly provided."""
@@ -207,6 +269,28 @@ class Settings:
                 "max_workers": "max_workers",
             },
         }
+
+        # Load model configuration
+        if "models" in config:
+            models_config = config["models"]
+
+            # Load multicollinearity threshold
+            if "multicollinearity_threshold" in models_config:
+                self.multicollinearity_threshold = models_config[
+                    "multicollinearity_threshold"
+                ]
+
+            # Load individual model parameters
+            if "decision_tree" in models_config:
+                self.decision_tree_params.update(models_config["decision_tree"])
+
+            if "logistic_regression" in models_config:
+                self.logistic_regression_params.update(
+                    models_config["logistic_regression"]
+                )
+
+            if "random_forest" in models_config:
+                self.random_forest_params.update(models_config["random_forest"])
 
         # Load each section
         for section, mappings in config_mappings.items():

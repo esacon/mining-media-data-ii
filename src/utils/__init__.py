@@ -10,6 +10,7 @@ from .data_utils import (
 )
 from .file_utils import count_lines, ensure_dir, get_file_size
 from .logging_utils import LoggerMixin, get_logger, setup_logger
+from .report_utils import generate_performance_report
 from .time_utils import (
     convert_timestamp,
     detect_time_format,
@@ -40,4 +41,6 @@ __all__ = [
     "split_jsonl_by_ids",
     "calculate_dataset_stats",
     "_get_player_id_from_record",
+    # Report utilities
+    "generate_performance_report",
 ]

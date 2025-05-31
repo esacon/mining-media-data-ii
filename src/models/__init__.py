@@ -1,8 +1,8 @@
-# src/models/__init__.py
-
 from .base_classifier import BaseClassifier
 from .decision_tree_classifier import DecisionTreeClassifier
 from .logistic_regression_classifier import LogisticRegressionClassifier
+from .model_config import ModelConfig, ModelConfigManager
+from .model_pipeline import ModelPipeline
 from .random_forest_classifier import RandomForestClassifier
 
 __all__ = [
@@ -10,8 +10,7 @@ __all__ = [
     "DecisionTreeClassifier",
     "LogisticRegressionClassifier",
     "RandomForestClassifier",
+    "ModelPipeline",
+    "ModelConfigManager",
+    "ModelConfig",
 ]
-
-# This file makes the 'models' directory a Python package,
-# allowing for easier imports of the classifier classes.
-# Example: from src.models import DecisionTreeClassifier

@@ -66,6 +66,43 @@ feature_engineering:
     - "purchaseCount"          # Total number of vehicle purchases
     - "highestPrice"           # Highest price among purchases
 
+# Model Configuration
+models:
+  # Data preprocessing
+  multicollinearity_threshold: 0.95  # Correlation threshold for feature removal
+
+  # Model parameters
+  decision_tree:
+    random_state: 42
+    max_depth: 10                    # Constrain depth to prevent overfitting
+    min_samples_split: 20
+    min_samples_leaf: 10
+    criterion: "gini"
+    max_features: "sqrt"             # Use feature selection
+    class_weight: "balanced"         # Handle class imbalance
+    ccp_alpha: 0.01                  # Cost complexity pruning
+
+  logistic_regression:
+    random_state: 42
+    solver: "saga"               # Good for large datasets and L1/L2 penalties
+    penalty: "l2"                # L2 regularization
+    max_iter: 5000               # Increased for convergence
+    C: 0.1                       # Regularization strength
+    tol: 0.001                   # Tolerance for stopping criterion
+    class_weight: "balanced"     # Handle class imbalance
+
+  random_forest:
+    random_state: 42
+    n_estimators: 100            # Number of trees
+    max_depth: 15
+    min_samples_split: 10
+    min_samples_leaf: 5
+    max_features: "sqrt"         # Features to consider at each split
+    n_jobs: -1                   # Use all available cores
+    bootstrap: true
+    oob_score: true              # Out-of-bag scoring
+    class_weight: "balanced"     # Handle class imbalance
+
 # Logging Configuration
 logging:
   level: "INFO"                # DEBUG, INFO, WARNING, ERROR, CRITICAL
