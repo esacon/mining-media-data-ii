@@ -1,268 +1,188 @@
 # Project Structure
 
-This document outlines the organized structure of the churn prediction project.
+This document outlines the streamlined structure of the churn prediction project, designed for simplicity and maintainability.
 
 ## Directory Structure
 
 ```
 project-1/
 ├── src/                              # Source code
-│   ├── __init__.py                   # Main package init
 │   ├── config/                       # Configuration management
-│   │   ├── __init__.py
-│   │   └── settings.py               # Project settings and environment config
-│   ├── utils/                        # Utility modules
-│   │   ├── __init__.py
-│   │   ├── logging_utils.py          # Logging utilities
+│   │   └── settings.py               # Centralized project settings
+│   ├── utils/                        # Utility functions
+│   │   ├── logging_utils.py          # Logging setup
 │   │   ├── file_utils.py             # File operations
 │   │   ├── time_utils.py             # Time/timestamp utilities
 │   │   └── data_utils.py             # Data processing utilities
-│   ├── data_processing/              # Data processing pipeline
-│   │   ├── __init__.py
-│   │   ├── data_preparation.py       # CSV to JSONL conversion, splitting
-│   │   ├── dataset_creation.py       # Observation/churn period labeling
-│   │   ├── feature_engineering.py    # Feature extraction from labeled datasets
-│   │   └── pipeline.py               # Main pipeline orchestrator
+│   ├── data_processing/              # Main data pipeline
+│   │   ├── data_preparation.py       # CSV→JSONL conversion & splitting
+│   │   ├── dataset_creation.py       # Observation/churn labeling
+│   │   ├── feature_engineering.py    # Kim et al. (2017) features
+│   │   └── pipeline.py               # Pipeline orchestrator
 │   ├── scripts/                      # Executable scripts
-│   │   ├── __init__.py
 │   │   ├── run_pipeline.py           # Main pipeline runner
-│   │   └── inspect_datasets.py       # Dataset inspection tool
-│   ├── data/                         # Data directory
-│   │   ├── dataset_game1/            # Game 1 raw data
-│   │   ├── dataset_game2/            # Game 2 raw data
-│   │   ├── processed/                # Processed datasets
-│   │   │   ├── README.md             # Processed data documentation
-│   │   │   ├── *.jsonl               # Player event files
-│   │   │   ├── *_labeled.jsonl       # Labeled datasets (DS1, DS2)
-│   │   │   ├── *_stats.json          # Dataset statistics
-│   │   └── _analysis/                # Data analysis files
-│   ├── lib/                          # External libraries (if any)
-│   ├── models/                       # Model implementations (future)
-│   └── tests/                        # Unit tests (future)
+│   │   └── inspect_datasets.py       # Dataset inspection
+│   └── data/                         # Data directory
+│       ├── dataset_game1/            # Game 1 raw data
+│       ├── dataset_game2/            # Game 2 raw data
+│       └── processed/                # Generated datasets
+├── results/features/                 # Extracted feature CSV files
 ├── logs/                             # Log files
-├── results/                          # Analysis results and figures
-│   └── features/                     # Extracted feature CSV files
-│       ├── game1_DS1_features.csv    # Game 1 training features
-│       ├── game1_DS2_features.csv    # Game 1 evaluation features
-│       ├── game2_DS1_features.csv    # Game 2 training features
-│       └── game2_DS2_features.csv    # Game 2 evaluation features
-├── references/                       # Reference materials
-├── scripts/                          # Additional utility scripts
-├── requirements.txt                  # Python dependencies
-├── Pipfile                           # Pipenv configuration
-├── Pipfile.lock                      # Pipenv lock file
-├── config.yaml                       # Main configuration file
-├── README.md                         # Main project README
-└── PROJECT_STRUCTURE.md              # This file
+├── config.yaml                       # Main configuration
+└── requirements.txt                  # Dependencies
 ```
 
-## Module Descriptions
+## Core Components
 
-### Core Packages
+### Data Processing Pipeline (`src/data_processing/`)
 
-#### `src/config/`
-- **Purpose**: Centralized configuration management
-- **Key Files**:
-  - `settings.py`: Project settings, environment variables, directory paths, and filename configurations
+The pipeline follows a simple 3-step process:
 
-#### `src/utils/`
-- **Purpose**: Reusable utility functions
-- **Key Files**:
-  - `logging_utils.py`: Consistent logging setup across modules
-  - `file_utils.py`: File operations, size calculations, directory management
-  - `time_utils.py`: Timestamp format detection and conversion
-  - `data_utils.py`: JSONL processing, dataset statistics
+#### 1. **Data Preparation** (`data_preparation.py`)
+- **Purpose**: Convert and split raw data
+- **Key Features**:
+  - Converts Game 1 CSV to JSONL format
+  - Creates 80/20 train/eval splits for both games
+  - Unified path handling for all file operations
 
-#### `src/data_processing/`
-- **Purpose**: Complete data pipeline from raw data to ML-ready features
-- **Key Files**:
-  - `data_preparation.py`: CSV to JSONL conversion, train/eval splitting
-  - `dataset_creation.py`: Observation/churn period processing, labeling
-  - `feature_engineering.py`: Behavioral feature extraction, implements Kim et al. (2017) features
-  - `pipeline.py`: Main orchestrator for the complete pipeline
+#### 2. **Dataset Creation** (`dataset_creation.py`)
+- **Purpose**: Create labeled datasets with observation/churn periods
+- **Key Features**:
+  - Defines 5-day observation period per player
+  - Defines 10-day churn prediction period
+  - Labels players as churned/not churned
+  - Generates DS1 (train) and DS2 (eval) datasets
 
-#### `src/scripts/`
-- **Purpose**: Executable command-line scripts
-- **Key Files**:
-  - `run_pipeline.py`: Main entry point with CLI arguments
-  - `inspect_datasets.py`: Dataset inspection and visualization
+#### 3. **Feature Engineering** (`feature_engineering.py`)
+- **Purpose**: Extract behavioral features from observation periods
+- **Key Features**:
+  - Implements 10 common features from Kim et al. (2017)
+  - Adds game-specific features for Game 2
+  - Validates and cleans extracted features
+  - Generates ML-ready CSV files
 
-## Design Principles
+#### 4. **Pipeline Orchestrator** (`pipeline.py`)
+- **Purpose**: Coordinates the complete pipeline
+- **Key Features**:
+  - Manages step execution with timing
+  - Handles logging and error reporting
+  - Supports step-by-step or full pipeline execution
 
-### 1. **Separation of Concerns**
-- Each module has a single, well-defined responsibility
-- Utilities are separated from business logic
-- Configuration is centralized
+### Configuration (`src/config/`)
 
-### 2. **Reusability**
-- Common operations are abstracted into utility functions
-- Modules can be imported and used independently
-- Clear interfaces between components
+Centralized configuration management with YAML support:
+- **Single source of truth** for all settings
+- **Flexible overrides** via command line
+- **Automatic directory creation**
+- **Type-safe configuration** with validation
 
-### 3. **Scalability**
-- Modular design allows easy addition of new features
-- Configuration-driven approach for easy parameter changes
-- Logging and error handling throughout
+### Utilities (`src/utils/`)
 
-### 4. **Maintainability**
-- Clear naming conventions
-- Comprehensive documentation
-- Type hints for better code clarity
-- Consistent error handling
+Reusable functions supporting the pipeline:
+- **Logging**: Consistent logging across all modules
+- **File Operations**: Reading, writing, and path management
+- **Time Handling**: Timestamp conversion and boundary calculations
+- **Data Processing**: JSONL operations and statistics
 
-## Usage Patterns
+## Quick Start
 
-### Running the Pipeline
+### Basic Usage
 ```bash
-# Full pipeline
+# Run complete pipeline
 python src/scripts/run_pipeline.py
 
-# With custom parameters
+# Run with custom parameters
 python src/scripts/run_pipeline.py --observation-days 7 --churn-days 14
 
-# Only data preparation
+# Run individual steps
 python src/scripts/run_pipeline.py --prep-only
+python src/scripts/run_pipeline.py --create-only
+python src/scripts/run_pipeline.py --features-only
 ```
 
-### Inspecting Results
-```bash
-# Basic inspection
-python src/scripts/inspect_datasets.py
-
-# Detailed inspection with event details
-python src/scripts/inspect_datasets.py --detailed
-
-# Inspect only Game 1
-python src/scripts/inspect_datasets.py --game game1
-```
-
-### Using as Library
+### Programmatic Usage
 ```python
-from src.data_processing import DataPipeline, FeatureExtractor
 from src.config import get_settings
+from src.data_processing import DataPipeline
 
-# Use with default settings
+# Load settings and run pipeline
 settings = get_settings()
 pipeline = DataPipeline(settings)
-results = pipeline.run_full_pipeline()
-
-# Extract features
-extractor = FeatureExtractor(settings)
-features_df = extractor.extract_features_from_dataset('game1_DS1_labeled.jsonl', 'game1')
-
-# Use with custom settings
-settings = get_settings("custom_config.yaml")
-pipeline = DataPipeline(settings)
+pipeline.run_full_pipeline()
 ```
 
-## Configuration Management
+## Configuration System
 
-The project uses a YAML-based configuration system with centralized filename management:
-
-- **YAML Configuration**: Main settings in `config.yaml` at project root
-- **Settings Class**: Type-safe configuration with validation in `src/config/settings.py`
-- **Command Line Overrides**: Temporary parameter changes via CLI arguments
-- **Directory Management**: Automatic creation of required directories
-- **Filename Configuration**: All filenames centrally managed and configurable
-
-### Configuration Structure
-
+### YAML Configuration (`config.yaml`)
 ```yaml
-data_processing:          # Core processing parameters
-  observation_days: 5
-  churn_period_days: 10
-  train_ratio: 0.8
-  random_seed: 42
+data_processing:
+  observation_days: 5          # Observation period
+  churn_period_days: 10        # Churn prediction period
+  train_ratio: 0.8             # Train/eval split
 
-paths:                    # Directory paths
+paths:
   data_dir: "src/data"
   processed_dir: "src/data/processed"
-  logs_dir: "logs"
   results_dir: "results"
 
-filenames:                # File naming configuration
-  # Input files
+filenames:
+  # All filenames centrally managed
   game1_csv: "dataset_game1/rawdata_game1.csv"
   game2_jsonl: "dataset_game2/playerLogs_game2_playerbasedlines.jsonl"
+  # ... (see config.yaml for complete list)
 
-  # Intermediate files
-  game1_converted: "game1_player_events.jsonl"
-  game1_train: "game1_player_events_train.jsonl"
-  game1_eval: "game1_player_events_eval.jsonl"
-  game2_train: "playerLogs_game2_playerbasedlines_train.jsonl"
-  game2_eval: "playerLogs_game2_playerbasedlines_eval.jsonl"
-
-  # Final labeled datasets
-  game1_ds1: "game1_DS1_labeled.jsonl"
-  game1_ds2: "game1_DS2_labeled.jsonl"
-  game2_ds1: "game2_DS1_labeled.jsonl"
-  game2_ds2: "game2_DS2_labeled.jsonl"
-
-  # File suffixes
-  train_suffix: "_train.jsonl"
-  eval_suffix: "_eval.jsonl"
-  labeled_suffix: "_labeled.jsonl"
-
-logging:                  # Logging configuration
+logging:
   level: "INFO"
   console: true
   file: true
-
-performance:              # Performance settings
-  batch_size: 1000
-  progress_interval: 1000
 ```
 
-### Usage Patterns
-
-```python
-# Load default configuration
-settings = get_settings()
-
-# Load custom configuration
-settings = get_settings("custom_config.yaml")
-
-# Reload configuration
-settings = reload_settings()
-
-# Access filename configurations
-print(f"Game 1 training file: {settings.game1_train}")
+### Command Line Overrides
+```bash
+# Override any configuration parameter
+python src/scripts/run_pipeline.py \
+  --data-dir /custom/data \
+  --observation-days 7 \
+  --churn-days 14 \
+  --log-level DEBUG
 ```
 
-### Component Initialization
+## Features Extracted
 
-All data processing components now use the settings-based approach:
+### Common Features (Both Games)
+Based on Kim et al. (2017) methodology:
 
-```python
-from src.config import get_settings
-from src.data_processing import DataPreparation, DatasetCreator, DataPipeline
+1. **playCount** - Total plays in observation period
+2. **bestScore** - Maximum score achieved
+3. **meanScore** - Average score
+4. **worstScore** - Minimum score
+5. **sdScore** - Standard deviation of scores
+6. **bestScoreIndex** - Position of best score (normalized)
+7. **bestSubMeanCount** - (Best - Mean) / Play count
+8. **bestSubMeanRatio** - (Best - Mean) / Mean
+9. **activeDuration** - Time between first and last play (hours)
+10. **consecutivePlayRatio** - Ratio of consecutive plays
 
-# Load settings
-settings = get_settings()
+### Game 2 Specific Features
+11. **purchaseCount** - Total vehicle purchases
+12. **highestPrice** - Highest purchase price
 
-# Initialize components with settings
-data_prep = DataPreparation(settings)
-dataset_creator = DatasetCreator(settings)
-pipeline = DataPipeline(settings)
-```
+## Output Files
 
-## Future Extensions
+The pipeline generates the following files:
 
-This structure is designed to easily accommodate:
+### Intermediate Files
+- `game1_player_events.jsonl` - Converted Game 1 data
+- `*_train.jsonl` / `*_eval.jsonl` - Train/eval splits
 
-1. **Feature Engineering**: Add `src/features/` package
-2. **Model Training**: Expand `src/models/` package
-3. **Evaluation**: Add `src/evaluation/` package
-4. **API**: Add `src/api/` for serving models
-5. **Visualization**: Add `src/visualization/` for plots and dashboards
+### Labeled Datasets
+- `game1_DS1_labeled.jsonl` - Game 1 training dataset
+- `game1_DS2_labeled.jsonl` - Game 1 evaluation dataset
+- `game2_DS1_labeled.jsonl` - Game 2 training dataset
+- `game2_DS2_labeled.jsonl` - Game 2 evaluation dataset
 
-## Benefits of This Structure
-
-1. **Clear Organization**: Easy to find and understand code
-2. **Modularity**: Components can be developed and tested independently
-3. **Reusability**: Utilities can be used across different parts of the project
-4. **Scalability**: Easy to add new features without restructuring
-5. **Maintainability**: Clear interfaces and separation of concerns
-6. **Professional**: Follows Python packaging best practices
-7. **Configurable**: Centralized filename and parameter management
-8. **Flexible**: Easy to customize for different environments or experiments
+### Feature Files
+- `results/features/game1_DS1_features.csv` - Game 1 training features
+- `results/features/game1_DS2_features.csv` - Game 1 evaluation features
+- `results/features/game2_DS1_features.csv` - Game 2 training features
+- `results/features/game2_DS2_features.csv` - Game 2 evaluation features
