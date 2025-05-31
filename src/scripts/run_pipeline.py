@@ -6,11 +6,14 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from src.config import get_settings
 from src.data_processing import DataPipeline
+from src.models.model_pipeline import ModelPipeline
 
 
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments for pipeline execution."""
-    parser = argparse.ArgumentParser(description="Run churn prediction data pipeline")
+    parser = argparse.ArgumentParser(
+        description="Run churn prediction data and model pipeline"
+    )
 
     # Configuration
     parser.add_argument(
@@ -65,6 +68,16 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Run only feature extraction step",
     )
+    step_group.add_argument(
+        "--models-only",
+        action="store_true",
+        help="Run only model training and evaluation step",
+    )
+    step_group.add_argument(
+        "--data-only",
+        action="store_true",
+        help="Run only data processing pipeline (prep + create + features)",
+    )
 
     return parser.parse_args()
 
@@ -87,24 +100,36 @@ def apply_overrides(settings, args: argparse.Namespace) -> None:
                 setattr(settings, attr, value)
 
 
-def run_pipeline_steps(pipeline: DataPipeline, args: argparse.Namespace) -> None:
+def run_pipeline_steps(
+    data_pipeline: DataPipeline, model_pipeline: ModelPipeline, args: argparse.Namespace
+) -> None:
     """Run appropriate pipeline steps based on arguments."""
     if args.prep_only:
-        pipeline.logger.info("Running data preparation only...")
-        pipeline.run_preparation()
+        data_pipeline.logger.info("Running data preparation only...")
+        data_pipeline.run_preparation()
     elif args.create_only:
-        pipeline.logger.info("Running dataset creation only...")
-        pipeline.run_dataset_creation()
+        data_pipeline.logger.info("Running dataset creation only...")
+        data_pipeline.run_dataset_creation()
     elif args.features_only:
-        pipeline.logger.info("Running feature extraction only...")
-        pipeline.run_feature_extraction()
+        data_pipeline.logger.info("Running feature extraction only...")
+        data_pipeline.run_feature_extraction()
+    elif args.models_only:
+        model_pipeline.logger.info("Running model training and evaluation only...")
+        model_pipeline.run_pipeline()
+    elif args.data_only:
+        data_pipeline.logger.info("Running data processing pipeline only...")
+        data_pipeline.run_full_pipeline()
     else:
-        pipeline.logger.info("Running full pipeline...")
-        pipeline.run_full_pipeline()
+        data_pipeline.logger.info(
+            "Running full pipeline (data processing + model training)..."
+        )
+        data_pipeline.run_full_pipeline()
+        model_pipeline.logger.info("Starting model training and evaluation...")
+        model_pipeline.run_pipeline()
 
 
 def main() -> None:
-    """Main function to load settings, initialize, and run the data pipeline."""
+    """Main function to load settings, initialize, and run the data and model pipelines."""
     try:
         args = parse_args()
 
@@ -113,9 +138,12 @@ def main() -> None:
         apply_overrides(settings, args)
         settings.__post_init__()
 
-        # Initialize and run pipeline
-        pipeline = DataPipeline(settings)
-        run_pipeline_steps(pipeline, args)
+        # Initialize pipelines
+        data_pipeline = DataPipeline(settings)
+        model_pipeline = ModelPipeline(settings)
+
+        # Run appropriate pipeline steps
+        run_pipeline_steps(data_pipeline, model_pipeline, args)
 
         print("\n🎉 Pipeline execution completed successfully!")
 

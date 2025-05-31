@@ -13,6 +13,10 @@ pytest = "*"
 isort = {extras = ["colors"], version = "*"}
 polars = "*"
 ijson = "*"
+tqdm = "*"
+torch = "*"
+scikit-learn = "*"
+transformers = "*"
 
 [dev-packages]
 
