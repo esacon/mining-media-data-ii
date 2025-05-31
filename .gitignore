@@ -82,7 +82,5 @@ src/data/processed/*.jsonl
 src/data/processed/*.json
 
 # Results and outputs
-results/
-outputs/
 *.pkl
 *.joblib

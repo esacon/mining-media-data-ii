@@ -17,7 +17,7 @@ repos:
         args: [--line-length=88]
 
   - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
+    rev: 6.0.1
     hooks:
       - id: isort
         args: [--profile=black, --line-length=88]
@@ -27,13 +27,3 @@ repos:
     hooks:
       - id: flake8
         args: [--max-line-length=88]
-
-  - repo: local
-    hooks:
-      - id: pytest-check
-        name: pytest-check
-        entry: pytest
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [commit] 

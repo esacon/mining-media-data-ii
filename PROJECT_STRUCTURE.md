@@ -21,26 +21,31 @@ project-1/
 │   │   ├── __init__.py
 │   │   ├── data_preparation.py       # CSV to JSONL conversion, splitting
 │   │   ├── dataset_creation.py       # Observation/churn period labeling
+│   │   ├── feature_engineering.py    # Feature extraction from labeled datasets
 │   │   └── pipeline.py               # Main pipeline orchestrator
 │   ├── scripts/                      # Executable scripts
 │   │   ├── __init__.py
 │   │   ├── run_pipeline.py           # Main pipeline runner
 │   │   └── inspect_datasets.py       # Dataset inspection tool
 │   ├── data/                         # Data directory
-│   │   ├── dataset_game1/          # Game 1 raw data
-│   │   ├── dataset_game2/          # Game 2 raw data
+│   │   ├── dataset_game1/            # Game 1 raw data
+│   │   ├── dataset_game2/            # Game 2 raw data
 │   │   ├── processed/                # Processed datasets
 │   │   │   ├── README.md             # Processed data documentation
 │   │   │   ├── *.jsonl               # Player event files
 │   │   │   ├── *_labeled.jsonl       # Labeled datasets (DS1, DS2)
 │   │   │   ├── *_stats.json          # Dataset statistics
-│   │   │   └── pipeline_results.json # Pipeline execution results
 │   │   └── _analysis/                # Data analysis files
 │   ├── lib/                          # External libraries (if any)
 │   ├── models/                       # Model implementations (future)
 │   └── tests/                        # Unit tests (future)
 ├── logs/                             # Log files
 ├── results/                          # Analysis results and figures
+│   └── features/                     # Extracted feature CSV files
+│       ├── game1_DS1_features.csv    # Game 1 training features
+│       ├── game1_DS2_features.csv    # Game 1 evaluation features
+│       ├── game2_DS1_features.csv    # Game 2 training features
+│       └── game2_DS2_features.csv    # Game 2 evaluation features
 ├── references/                       # Reference materials
 ├── scripts/                          # Additional utility scripts
 ├── requirements.txt                  # Python dependencies
@@ -69,10 +74,11 @@ project-1/
   - `data_utils.py`: JSONL processing, dataset statistics
 
 #### `src/data_processing/`
-- **Purpose**: Data preparation and dataset creation pipeline
+- **Purpose**: Complete data pipeline from raw data to ML-ready features
 - **Key Files**:
   - `data_preparation.py`: CSV to JSONL conversion, train/eval splitting
   - `dataset_creation.py`: Observation/churn period processing, labeling
+  - `feature_engineering.py`: Behavioral feature extraction, implements Kim et al. (2017) features
   - `pipeline.py`: Main orchestrator for the complete pipeline
 
 #### `src/scripts/`
@@ -132,13 +138,17 @@ python src/scripts/inspect_datasets.py --game game1
 
 ### Using as Library
 ```python
-from src.data_processing import DataPipeline
+from src.data_processing import DataPipeline, FeatureExtractor
 from src.config import get_settings
 
 # Use with default settings
 settings = get_settings()
 pipeline = DataPipeline(settings)
 results = pipeline.run_full_pipeline()
+
+# Extract features
+extractor = FeatureExtractor(settings)
+features_df = extractor.extract_features_from_dataset('game1_DS1_labeled.jsonl', 'game1')
 
 # Use with custom settings
 settings = get_settings("custom_config.yaml")
@@ -174,25 +184,20 @@ filenames:                # File naming configuration
   # Input files
   game1_csv: "dataset_game1/rawdata_game1.csv"
   game2_jsonl: "dataset_game2/playerLogs_game2_playerbasedlines.jsonl"
-  
+
   # Intermediate files
   game1_converted: "game1_player_events.jsonl"
   game1_train: "game1_player_events_train.jsonl"
   game1_eval: "game1_player_events_eval.jsonl"
   game2_train: "playerLogs_game2_playerbasedlines_train.jsonl"
   game2_eval: "playerLogs_game2_playerbasedlines_eval.jsonl"
-  
+
   # Final labeled datasets
   game1_ds1: "game1_DS1_labeled.jsonl"
   game1_ds2: "game1_DS2_labeled.jsonl"
   game2_ds1: "game2_DS1_labeled.jsonl"
   game2_ds2: "game2_DS2_labeled.jsonl"
-  
-  # Result files
-  preparation_results: "preparation_results.json"
-  dataset_creation_results: "dataset_creation_results.json"
-  pipeline_results: "pipeline_results.json"
-  
+
   # File suffixes
   train_suffix: "_train.jsonl"
   eval_suffix: "_eval.jsonl"
@@ -222,7 +227,6 @@ settings = reload_settings()
 
 # Access filename configurations
 print(f"Game 1 training file: {settings.game1_train}")
-print(f"Pipeline results file: {settings.pipeline_results}")
 ```
 
 ### Component Initialization
@@ -261,4 +265,4 @@ This structure is designed to easily accommodate:
 5. **Maintainability**: Clear interfaces and separation of concerns
 6. **Professional**: Follows Python packaging best practices
 7. **Configurable**: Centralized filename and parameter management
-8. **Flexible**: Easy to customize for different environments or experiments 
+8. **Flexible**: Easy to customize for different environments or experiments
