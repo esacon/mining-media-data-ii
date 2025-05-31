@@ -29,8 +29,7 @@ class LogisticRegressionClassifier(BaseClassifier):
             logger (optional): Logger instance. Defaults to None.
         """
         super().__init__(model_params, logger)
-        # Ensure 'solver' is appropriate if not specified, e.g., 'liblinear' for small datasets
-        if "solver" not in self.model_params:
+        if "solver" not in self.model_params:  # Default solver
             self.model_params["solver"] = "liblinear"
         self.model = SklearnLogisticRegression(**self.model_params)
         if self.logger:
@@ -61,22 +60,48 @@ class LogisticRegressionClassifier(BaseClassifier):
                 print(f"Error training Logistic Regression model: {e}")
             raise
 
+    def _prepare_features(self, X):
+        """Helper method to prepare features for prediction."""
+        if isinstance(X, pd.DataFrame):
+            return X.values
+        return X
+
+    def _validate_input(self, X):
+        """Helper method to validate input data."""
+        if X is None:
+            raise ValueError("Input data cannot be None")
+        if len(X.shape) != 2:
+            raise ValueError("Input data must be 2-dimensional")
+
+    def _align_features(self, X_test):
+        """Helper method to align features with training data."""
+        if hasattr(self.model, "feature_names_in_"):
+            model_features = list(self.model.feature_names_in_)
+            missing_cols = set(model_features) - set(X_test.columns)
+            if missing_cols:
+                error_msg = (
+                    f"X_test is missing columns required by the model: {missing_cols}. "
+                    f"Model was trained on: {model_features}"
+                )
+                if self.logger:
+                    self.logger.error(error_msg)
+                else:
+                    print(error_msg)
+                raise ValueError(error_msg)
+            return X_test[model_features]
+        elif self.logger:
+            self.logger.warning(
+                "Model does not have 'feature_names_in_'. "
+                "Proceeding with X_test as is. This may lead to errors if features mismatch."
+            )
+        return X_test
+
     def predict(self, X_test: pd.DataFrame) -> pd.Series:
         """
         Makes predictions using the trained Logistic Regression model.
-
-        Args:
-            X_test (pd.DataFrame): Test features.
-
-        Returns:
-            pd.Series: Predicted labels.
-
-        Raises:
-            ValueError: If the model has not been trained yet.
+        Ensures X_test columns match those seen during training.
         """
-        if self.model is None or not hasattr(
-            self.model, "coef_"
-        ):  # Check if model is fitted
+        if self.model is None or not hasattr(self.model, "coef_"):
             error_msg = "Model not trained yet or training failed. Call train() first."
             if self.logger:
                 self.logger.error(error_msg)
@@ -85,8 +110,21 @@ class LogisticRegressionClassifier(BaseClassifier):
             raise ValueError(error_msg)
 
         try:
-            predictions = self.model.predict(X_test)
-            return pd.Series(predictions, index=X_test.index, name="predictions")
+            X_test_aligned = self._align_features(X_test)
+            X_test_aligned = self._prepare_features(X_test_aligned)
+            predictions = self.model.predict(X_test_aligned)
+            return pd.Series(
+                predictions, index=X_test_aligned.index, name="predictions"
+            )
+        except ValueError as ve:
+            if self.logger:
+                self.logger.error(
+                    f"ValueError during Logistic Regression prediction: {ve}",
+                    exc_info=True,
+                )
+            else:
+                print(f"ValueError during Logistic Regression prediction: {ve}")
+            raise
         except Exception as e:
             if self.logger:
                 self.logger.error(
@@ -99,19 +137,9 @@ class LogisticRegressionClassifier(BaseClassifier):
     def predict_proba(self, X_test: pd.DataFrame) -> pd.DataFrame:
         """
         Predicts class probabilities using the trained Logistic Regression model.
-
-        Args:
-            X_test (pd.DataFrame): Test features.
-
-        Returns:
-            pd.DataFrame: Class probabilities. Columns are class labels.
-
-        Raises:
-            ValueError: If the model has not been trained yet.
+        Ensures X_test columns match those seen during training.
         """
-        if self.model is None or not hasattr(
-            self.model, "coef_"
-        ):  # Check if model is fitted
+        if self.model is None or not hasattr(self.model, "coef_"):
             error_msg = "Model not trained yet or training failed. Call train() first."
             if self.logger:
                 self.logger.error(error_msg)
@@ -120,10 +148,23 @@ class LogisticRegressionClassifier(BaseClassifier):
             raise ValueError(error_msg)
 
         try:
-            probabilities = self.model.predict_proba(X_test)
+            X_test_aligned = self._align_features(X_test)
+            X_test_aligned = self._prepare_features(X_test_aligned)
+            probabilities = self.model.predict_proba(X_test_aligned)
             return pd.DataFrame(
-                probabilities, index=X_test.index, columns=self.model.classes_
+                probabilities, index=X_test_aligned.index, columns=self.model.classes_
             )
+        except ValueError as ve:
+            if self.logger:
+                self.logger.error(
+                    f"ValueError during Logistic Regression probability prediction: {ve}",
+                    exc_info=True,
+                )
+            else:
+                print(
+                    f"ValueError during Logistic Regression probability prediction: {ve}"
+                )
+            raise
         except Exception as e:
             if self.logger:
                 self.logger.error(
@@ -137,15 +178,8 @@ class LogisticRegressionClassifier(BaseClassifier):
     def evaluate(self, X_test: pd.DataFrame, y_test: pd.Series) -> Dict[str, float]:
         """
         Evaluates the Logistic Regression model.
-
-        Args:
-            X_test (pd.DataFrame): Test features.
-            y_test (pd.Series): True test labels.
-
-        Returns:
-            Dict[str, float]: Dictionary of performance metrics.
         """
-        predictions = self.predict(X_test)
+        predictions = self.predict(X_test)  # Handles X_test alignment
         metrics = {}
         try:
             metrics["accuracy"] = accuracy_score(y_test, predictions)
@@ -155,7 +189,9 @@ class LogisticRegressionClassifier(BaseClassifier):
 
             if hasattr(self.model, "predict_proba"):
                 if len(y_test.unique()) > 1 and len(self.model.classes_) > 1:
-                    y_pred_proba = self.predict_proba(X_test)
+                    y_pred_proba = self.predict_proba(
+                        X_test
+                    )  # Handles X_test alignment
                     if y_pred_proba.shape[1] > 1:
                         metrics["roc_auc"] = roc_auc_score(
                             y_test, y_pred_proba.iloc[:, 1]
@@ -185,5 +221,4 @@ class LogisticRegressionClassifier(BaseClassifier):
                 )
             else:
                 print(f"Error during Logistic Regression evaluation: {e}")
-
         return metrics
