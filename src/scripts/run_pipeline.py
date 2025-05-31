@@ -9,115 +9,121 @@ from src.data_processing import DataPipeline
 
 
 def parse_args() -> argparse.Namespace:
-    """Parses command-line arguments for pipeline execution.
-
-    Returns:
-        argparse.Namespace: An object containing the parsed arguments.
-    """
+    """Parse command-line arguments for pipeline execution."""
     parser = argparse.ArgumentParser(description="Run churn prediction data pipeline")
 
+    # Configuration
     parser.add_argument(
         "--config",
         type=str,
-        default=None,
-        help="Path to a custom config.yaml file. Defaults to project root/config.yaml.",
+        help="Path to custom config.yaml file",
     )
 
+    # Directory overrides
     parser.add_argument(
         "--data-dir",
         type=str,
-        default=None,
-        help="Override the base data directory from the config file.",
+        help="Override base data directory",
     )
-
     parser.add_argument(
         "--output-dir",
         type=str,
-        default=None,
-        help="Override the processed data output directory from the config file.",
+        help="Override processed data output directory",
     )
 
+    # Parameter overrides
     parser.add_argument(
         "--observation-days",
         type=int,
-        default=None,
-        help="Override the observation period in days from the config file.",
+        help="Override observation period in days",
     )
-
     parser.add_argument(
         "--churn-days",
         type=int,
-        default=None,
-        help="Override the churn prediction period in days from the config file.",
+        help="Override churn prediction period in days",
     )
-
     parser.add_argument(
         "--log-level",
         type=str,
-        default=None,
-        help="Override the logging level (e.g., 'INFO', 'DEBUG') from the config file.",
+        help="Override logging level (INFO, DEBUG, etc.)",
     )
 
-    parser.add_argument(
+    # Step selection (mutually exclusive)
+    step_group = parser.add_mutually_exclusive_group()
+    step_group.add_argument(
         "--prep-only",
         action="store_true",
-        help="Run only the data preparation step (conversion and splitting).",
+        help="Run only data preparation step",
     )
-
-    parser.add_argument(
+    step_group.add_argument(
         "--create-only",
         action="store_true",
-        help="Run only the dataset creation step (requires data preparation to be completed).",
+        help="Run only dataset creation step",
+    )
+    step_group.add_argument(
+        "--features-only",
+        action="store_true",
+        help="Run only feature extraction step",
     )
 
     return parser.parse_args()
 
 
-def _apply_argument_overrides(settings, args: argparse.Namespace) -> None:
+def apply_overrides(settings, args: argparse.Namespace) -> None:
     """Apply command-line argument overrides to settings."""
-    if args.data_dir:
-        settings.data_dir = Path(args.data_dir)
-    if args.output_dir:
-        settings.processed_dir = Path(args.output_dir)
-    if args.observation_days is not None:
-        settings.observation_days = args.observation_days
-    if args.churn_days is not None:
-        settings.churn_period_days = args.churn_days
-    if args.log_level:
-        settings.log_level = args.log_level
+    overrides = {
+        "data_dir": args.data_dir,
+        "processed_dir": args.output_dir,
+        "observation_days": args.observation_days,
+        "churn_period_days": args.churn_days,
+        "log_level": args.log_level,
+    }
+
+    for attr, value in overrides.items():
+        if value is not None:
+            if attr in ["data_dir", "processed_dir"]:
+                setattr(settings, attr, Path(value))
+            else:
+                setattr(settings, attr, value)
 
 
-def _run_pipeline_step(pipeline, args: argparse.Namespace) -> None:
-    """Run the appropriate pipeline step based on command-line arguments."""
+def run_pipeline_steps(pipeline: DataPipeline, args: argparse.Namespace) -> None:
+    """Run appropriate pipeline steps based on arguments."""
     if args.prep_only:
-        pipeline.logger.info("Running only data preparation step...")
+        pipeline.logger.info("Running data preparation only...")
         pipeline.run_preparation()
     elif args.create_only:
-        pipeline.logger.info("Running only dataset creation step...")
+        pipeline.logger.info("Running dataset creation only...")
         pipeline.run_dataset_creation()
-        pipeline.print_summary(pipeline.dataset_creator.create_all_datasets())
+    elif args.features_only:
+        pipeline.logger.info("Running feature extraction only...")
+        pipeline.run_feature_extraction()
     else:
-        pipeline.logger.info("Running full data pipeline...")
+        pipeline.logger.info("Running full pipeline...")
         pipeline.run_full_pipeline()
 
 
 def main() -> None:
     """Main function to load settings, initialize, and run the data pipeline."""
-    args = parse_args()
-    settings = get_settings(args.config)
-
-    _apply_argument_overrides(settings, args)
-    settings.__post_init__()
-
-    pipeline = DataPipeline(settings=settings)
-
     try:
-        _run_pipeline_step(pipeline, args)
+        args = parse_args()
+
+        # Load and configure settings
+        settings = get_settings(args.config)
+        apply_overrides(settings, args)
+        settings.__post_init__()
+
+        # Initialize and run pipeline
+        pipeline = DataPipeline(settings)
+        run_pipeline_steps(pipeline, args)
+
+        print("\n🎉 Pipeline execution completed successfully!")
+
     except KeyboardInterrupt:
-        pipeline.logger.info("Pipeline interrupted by user.")
+        print("\nPipeline interrupted by user.")
         sys.exit(1)
     except Exception as e:
-        pipeline.logger.error(f"Pipeline failed: {e}", exc_info=True)
+        print(f"Pipeline failed: {e}")
         sys.exit(1)
 
 

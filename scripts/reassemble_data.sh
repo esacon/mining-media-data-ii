@@ -12,7 +12,7 @@ if [ ! -f "src/data/dataset_game2/playerLogs_game2_playerbasedlines_part_aa" ]; 
 fi
 
 # Combine the parts
-cat src/data/dataset_2/playerLogs_game2_playerbasedlines_part_* > src/data/dataset_2/playerLogs_game2_playerbasedlines.jsonl
+cat src/data/dataset_game2/playerLogs_game2_playerbasedlines_part_* > src/data/dataset_game2/playerLogs_game2_playerbasedlines.jsonl
 
-echo "Reassembly complete. Original file restored to src/data/dataset_2/playerLogs_game2_playerbasedlines.jsonl"
-echo "File size: $(ls -lh src/data/dataset_2/playerLogs_game2_playerbasedlines.jsonl | awk '{print $5}')" 
+echo "Reassembly complete. Original file restored to src/data/dataset_game2/playerLogs_game2_playerbasedlines.jsonl"
+echo "File size: $(ls -lh src/data/dataset_game2/playerLogs_game2_playerbasedlines.jsonl | awk '{print $5}')"

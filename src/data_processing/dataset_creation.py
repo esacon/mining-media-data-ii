@@ -11,48 +11,41 @@ from src.utils import (
     ensure_dir,
     get_time_boundaries,
     jsonl_iterator,
-    save_json,
 )
 
 
 class DatasetCreator(LoggerMixin):
-    """Creates labeled datasets for churn prediction by defining observation and churn periods
-    based on player event data.
-    """
+    """Creates labeled datasets for churn prediction."""
 
     def __init__(self, settings: Settings):
-        """Initializes the DatasetCreator.
-
-        Args:
-            settings (Settings): Configuration settings containing paths, filenames, and parameters.
-        """
         self.settings = settings
         self.data_dir = settings.processed_dir
         self.output_dir = ensure_dir(settings.processed_dir)
         self.observation_days = settings.observation_days
         self.churn_period_days = settings.churn_period_days
 
+    def _get_path(self, file_path: Union[str, Path]) -> Path:
+        """Get full path for files."""
+        return (
+            self.data_dir / file_path
+            if not Path(file_path).is_absolute()
+            else Path(file_path)
+        )
+
     def process_player_records(self, player_data: Dict) -> Optional[Dict]:
         """Processes a single player's raw event records to create a labeled data point.
 
-        It identifies observation and churn periods based on the player's first event,
-        assigns a churn label, and counts events within each period.
-
         Args:
-            player_data (Dict): A dictionary containing a player's raw data, expected to have
-                                "records" (list of event dicts) and an ID field like "device_id" or "uid".
+            player_data (Dict): A dictionary containing the player's data.
 
         Returns:
-            Optional[Dict]: A dictionary containing the processed and labeled data for the player,
-                            including observation records, churn period records, churn label,
-                            time boundaries, and event counts. Returns None if the player has no records.
+            Optional[Dict]: A dictionary containing the processed player data.
         """
         records = player_data.get("records", [])
         if not records:
             return None
 
         records.sort(key=lambda x: x["time"])
-
         first_time = records[0]["time"]
         boundaries = get_time_boundaries(
             first_time, self.observation_days, self.churn_period_days
@@ -73,15 +66,11 @@ class DatasetCreator(LoggerMixin):
         if not observation_records:
             return None
 
-        churned = len(churn_period_records) == 0
-
-        player_id = _get_player_id_from_record(player_data, None)
-
         return {
-            "player_id": player_id,
+            "player_id": _get_player_id_from_record(player_data, None),
             "observation_records": observation_records,
             "churn_period_records": churn_period_records,
-            "churned": churned,
+            "churned": len(churn_period_records) == 0,
             "op_start": boundaries["op_start_iso"],
             "op_end": boundaries["op_end_iso"],
             "cp_start": boundaries["cp_start_iso"],
@@ -91,23 +80,22 @@ class DatasetCreator(LoggerMixin):
         }
 
     def create_dataset(self, input_file: Union[str, Path], output_prefix: str) -> Path:
-        """Creates a labeled dataset from an input JSONL file containing player records.
-
-        This function iterates through each player's data, processes it using
-        `process_player_records`, and writes the labeled output to a new JSONL file.
-        It also logs processing progress and basic statistics upon completion.
+        """Creates a labeled dataset from an input JSONL file.
 
         Args:
-            input_file (Union[str, Path]): The name of the input JSONL file (relative to `self.data_dir`).
-            output_prefix (str): A prefix for the output labeled JSONL file and its statistics file.
-                                 The output file will be named "{output_prefix}{labeled_suffix}".
+            input_file (Union[str, Path]): The path to the input JSONL file.
+            output_prefix (str): The prefix for the output file name.
 
         Returns:
-            Path: The full path to the generated labeled JSONL file.
+            Path: The path to the output file.
+
+        Raises:
+            FileNotFoundError: If the input file is not found.
+            Exception: If an error occurs during dataset creation.
         """
         self.logger.info(f"Creating dataset from {input_file}...")
 
-        input_path = self.data_dir / input_file
+        input_path = self._get_path(input_file)
         output_file_name = f"{output_prefix}{self.settings.labeled_suffix}"
         output_path = self.output_dir / output_file_name
 
@@ -121,7 +109,6 @@ class DatasetCreator(LoggerMixin):
 
                 try:
                     processed_data = self.process_player_records(player_data)
-
                     if processed_data:
                         f_out.write(
                             json.dumps(processed_data, ensure_ascii=False) + "\n"
@@ -129,71 +116,57 @@ class DatasetCreator(LoggerMixin):
                         processed_count += 1
                     else:
                         skipped_count += 1
-
                 except Exception as e:
-                    self.logger.warning(
-                        f"Error processing line {line_num + 1} in {input_file}: {e}"
-                    )
+                    self.logger.warning(f"Error processing line {line_num + 1}: {e}")
                     skipped_count += 1
 
-        self.logger.info(
-            f"Finished processing {input_file}. Total processed: {processed_count}, Skipped: {skipped_count}"
-        )
+        self.logger.info(f"Processed: {processed_count}, Skipped: {skipped_count}")
         return output_path
 
     def create_all_datasets(self) -> Dict[str, Dict[str, str]]:
-        """Creates all necessary labeled datasets for both Game 1 and Game 2.
+        """Creates all necessary labeled datasets for both games.
 
-        This includes creating training (DS1) and evaluation (DS2) datasets for each game.
-        The names of the created files are stored and returned in a dictionary.
+        Args:
+            None
 
         Returns:
-            Dict[str, Dict[str, str]]: A dictionary mapping game names to a dictionary
-                                       of dataset types ("DS1", "DS2") and their corresponding
-                                       generated filenames.
+            Dict[str, Dict[str, str]]: A dictionary containing the paths to the created datasets.
         """
-        self.logger.info("Creating all datasets (DS1 and DS2 for both games)...")
+        self.logger.info("Creating all datasets...")
 
-        datasets_to_process = {
+        datasets_config = {
             "game1": {
-                "train": self.settings.game1_train,
-                "eval": self.settings.game1_eval,
+                "train": (self.settings.game1_train, "game1_DS1"),
+                "eval": (self.settings.game1_eval, "game1_DS2"),
             },
             "game2": {
-                "train": self.settings.game2_train,
-                "eval": self.settings.game2_eval,
+                "train": (self.settings.game2_train, "game2_DS1"),
+                "eval": (self.settings.game2_eval, "game2_DS2"),
             },
         }
 
         results = {}
-
-        for game, files in datasets_to_process.items():
+        for game, files in datasets_config.items():
             results[game] = {}
-
-            # Create DS1 (training dataset)
-            ds1_path = self.create_dataset(files["train"], f"{game}_DS1")
-            results[game]["DS1"] = ds1_path.name
-
-            # Create DS2 (evaluation dataset)
-            ds2_path = self.create_dataset(files["eval"], f"{game}_DS2")
-            results[game]["DS2"] = ds2_path.name
-
-        save_json(results, self.output_dir / self.settings.dataset_creation_results)
+            for dataset_type, (input_file, output_prefix) in files.items():
+                dataset_path = self.create_dataset(input_file, output_prefix)
+                results[game][
+                    "DS1" if dataset_type == "train" else "DS2"
+                ] = dataset_path.name
 
         self.logger.info("All datasets created successfully!")
         return results
 
     def get_dataset_summary(self, dataset_file: Union[str, Path]) -> Dict:
-        """Gets summary statistics for a previously created labeled dataset.
+        """Gets summary statistics for a labeled dataset.
 
         Args:
-            dataset_file (Union[str, Path]): The name or path of the labeled dataset file.
-                                            Assumed to be in `self.output_dir` if only a name is given.
+            dataset_file (Union[str, Path]): The path to the labeled dataset file.
 
         Returns:
-            Dict: A dictionary containing comprehensive statistics for the dataset.
+            Dict: A dictionary containing the summary statistics.
         """
-        dataset_path = Path(dataset_file)
+        dataset_path = self._get_path(dataset_file)
         if not dataset_path.is_absolute():
             dataset_path = self.output_dir / dataset_file
         return calculate_dataset_stats(dataset_path)

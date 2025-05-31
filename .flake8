@@ -1,6 +1,6 @@
 [flake8]
 max-line-length = 88
-extend-ignore = 
+extend-ignore =
     # E203: whitespace before ':' (conflicts with black)
     E203,
     # E501: line too long (handled by black)
@@ -9,7 +9,7 @@ extend-ignore =
     W503,
     # E402: module level import not at top of file
     E402
-exclude = 
+exclude =
     .git,
     __pycache__,
     .venv,
@@ -31,4 +31,4 @@ per-file-ignores =
     # Allow star imports in test files
     test_*.py:F401,F403
 max-complexity = 10
-docstring-convention = google 
+docstring-convention = google

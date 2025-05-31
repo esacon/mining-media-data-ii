@@ -10,7 +10,6 @@ from src.utils import (
     LoggerMixin,
     ensure_dir,
     get_player_ids,
-    save_json,
     split_jsonl_by_ids,
 )
 
@@ -29,6 +28,11 @@ class DataPreparation(LoggerMixin):
         self.settings = settings
         self.data_dir = settings.data_dir
         self.output_dir = ensure_dir(settings.processed_dir)
+
+    def _get_path(self, file_path: Union[str, Path], is_output: bool = False) -> Path:
+        """Get full path for input or output files."""
+        base_dir = self.output_dir if is_output else self.data_dir
+        return base_dir / file_path
 
     def convert_game1_to_jsonl(
         self, input_file: Union[str, Path] = None, output_file: Union[str, Path] = None
@@ -52,12 +56,10 @@ class DataPreparation(LoggerMixin):
         """
         self.logger.info("Converting Game 1 data from CSV to JSONL...")
 
-        if input_file is None:
-            input_file = self.settings.game1_csv
-        if output_file is None:
-            output_file = self.settings.game1_converted
+        input_file = input_file or self.settings.game1_csv
+        output_file = output_file or self.settings.game1_converted
 
-        input_path = self.data_dir / input_file
+        input_path = self._get_path(input_file)
         if not input_path.exists():
             raise FileNotFoundError(f"Input file not found: {input_path}")
 
@@ -67,7 +69,7 @@ class DataPreparation(LoggerMixin):
             [pl.col("time").alias("times"), pl.col("score").alias("scores")]
         )
 
-        output_path = self.output_dir / output_file
+        output_path = self._get_path(output_file, is_output=True)
         with open(output_path, "w", encoding="utf-8") as f:
             for row in player_data.iter_rows(named=True):
                 events = []
@@ -108,41 +110,42 @@ class DataPreparation(LoggerMixin):
         Raises:
             FileNotFoundError: If the input JSONL file does not exist.
         """
-        if train_ratio is None:
-            train_ratio = self.settings.train_ratio
-        if seed is None:
-            seed = self.settings.random_seed
+        train_ratio = train_ratio or self.settings.train_ratio
+        seed = seed or self.settings.random_seed
 
         self.logger.info(f"Splitting {jsonl_file} into train/eval sets...")
 
-        if isinstance(jsonl_file, Path):
+        # Determine input path
+        if isinstance(jsonl_file, Path) and jsonl_file.is_absolute():
             input_path = jsonl_file
-        elif str(jsonl_file).startswith("game"):
-            input_path = self.output_dir / jsonl_file
         else:
-            input_path = self.data_dir / jsonl_file
+            is_processed = str(jsonl_file).startswith("game")
+            input_path = self._get_path(jsonl_file, is_output=is_processed)
 
         if not input_path.exists():
             raise FileNotFoundError(
                 f"Input JSONL file not found for splitting: {input_path}"
             )
 
+        # Get and shuffle player IDs
         player_ids = get_player_ids(input_path)
-
         random.seed(seed)
         random.shuffle(player_ids)
 
+        # Split IDs
         split_idx = int(len(player_ids) * train_ratio)
         train_ids = set(player_ids[:split_idx])
         eval_ids = set(player_ids[split_idx:])
 
+        # Generate output paths
         base_name = Path(jsonl_file).stem
         train_file_name = f"{base_name}{self.settings.train_suffix}"
         eval_file_name = f"{base_name}{self.settings.eval_suffix}"
 
-        train_path = self.output_dir / train_file_name
-        eval_path = self.output_dir / eval_file_name
+        train_path = self._get_path(train_file_name, is_output=True)
+        eval_path = self._get_path(eval_file_name, is_output=True)
 
+        # Split the data
         results = split_jsonl_by_ids(
             input_file=input_path,
             train_ids=train_ids,
@@ -164,7 +167,6 @@ class DataPreparation(LoggerMixin):
 
         This includes converting Game 1 CSV data to JSONL and then splitting
         both Game 1 and Game 2 data into training and evaluation sets.
-        Results (filenames of the split datasets) are saved to a JSON file.
 
         Returns:
             Dict[str, Dict[str, str]]: A dictionary containing the names of the
@@ -172,20 +174,19 @@ class DataPreparation(LoggerMixin):
         """
         self.logger.info("Starting data preparation pipeline...")
 
+        # Convert and split Game 1
         game1_jsonl_path = self.convert_game1_to_jsonl()
-
         game1_train_path, game1_eval_path = self.split_dataset(game1_jsonl_path)
 
+        # Split Game 2
         game2_train_path, game2_eval_path = self.split_dataset(
-            self.data_dir / self.settings.game2_jsonl
+            self.settings.game2_jsonl
         )
 
         results = {
             "game1": {"train": game1_train_path.name, "eval": game1_eval_path.name},
             "game2": {"train": game2_train_path.name, "eval": game2_eval_path.name},
         }
-
-        save_json(results, self.output_dir / self.settings.preparation_results)
 
         self.logger.info("Data preparation complete!")
         return results

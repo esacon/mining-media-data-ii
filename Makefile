@@ -55,4 +55,4 @@ all: format lint test
 
 # Pre-commit hook simulation
 pre-commit: check lint
-	@echo "Pre-commit checks passed!" 
+	@echo "Pre-commit checks passed!"
