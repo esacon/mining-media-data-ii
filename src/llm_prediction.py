@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 
 import numpy as np
 import torch
@@ -44,13 +45,44 @@ AVAILABLE_MODELS = {
 
 def load_dataset(game_number, dataset_type):
     """Load processed dataset."""
-    with open(f"processed_data/game{game_number}_{dataset_type}.json", "r") as f:
-        return json.load(f)
+    # Get the directory where this script is located
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # Construct path relative to the script location
+    filename = os.path.join(
+        script_dir, "data", "processed", f"game{game_number}_DS1_features.jsonl"
+    )
+    try:
+        with open(filename, "r") as f:
+            # Load JSONL file (one JSON object per line)
+            data = []
+            for line in f:
+                line = line.strip()
+                if line:  # Skip empty lines
+                    data.append(json.loads(line))
+            return data
+    except FileNotFoundError:
+        print(f"Error: Dataset file not found at {filename}")
+        raise
+    except json.JSONDecodeError:
+        print(
+            f"Error: Could not decode JSON from file {filename}. Ensure it's a valid JSONL file."
+        )
+        raise
 
 
 def create_prompt(player_data, game_number):
     """Create a prompt for the model based on player data."""
-    features = player_data["features"]
+    # Extract features from the flat player data structure
+    features = {
+        "active_duration": player_data.get("active_duration", 0),
+        "play_count": player_data.get("play_count", 0),
+        "consecutive_play_ratio": player_data.get("consecutive_play_ratio", 0),
+        "best_score": player_data.get("best_score", 0),
+        "worst_score": player_data.get("worst_score", 0),
+        "mean_score": player_data.get("mean_score", 0),
+        "purchase_count": player_data.get("purchase_count", 0),
+        "max_purchase": player_data.get("max_purchase", 0),
+    }
     feature_str = ", ".join([f"{k}: {v}" for k, v in features.items()])
 
     prompt = f"""In a mobile racing game (Game {game_number}), a player has shown the following activity in their first 5 days of playing: {feature_str}. Will the player stop playing in the next 10 days?"""
@@ -120,10 +152,16 @@ def evaluate_predictions(y_true, y_pred, y_pred_proba):
     """Calculate evaluation metrics."""
     metrics = {
         "accuracy": accuracy_score(y_true, y_pred),
-        "precision": precision_score(y_true, y_pred),
-        "recall": recall_score(y_true, y_pred),
-        "f1": f1_score(y_true, y_pred),
-        "auc_roc": roc_auc_score(y_true, y_pred_proba),
+        "precision": precision_score(
+            y_true, y_pred, zero_division=0
+        ),  # Added zero_division
+        "recall": recall_score(y_true, y_pred, zero_division=0),  # Added zero_division
+        "f1": f1_score(y_true, y_pred, zero_division=0),  # Added zero_division
+        "auc_roc": (
+            roc_auc_score(y_true, y_pred_proba)
+            if len(np.unique(y_true)) > 1
+            else "N/A (only one class present)"
+        ),  # Handle single class case for AUC
     }
     return metrics
 
@@ -172,30 +210,61 @@ def main():
         print(f"\nProcessing Game {game_number}...")
 
         # Load test data
-        test_data = load_dataset(game_number, "test")
-
-        # Get predictions for each player
+        try:
+            test_data = load_dataset(
+                game_number, "test"
+            )  # "test" is passed but not used in new filename logic
+        except Exception as e:
+            print(f"Could not load data for Game {game_number}. Skipping. Error: {e}")
+            continue  # Get predictions for each player
         predictions = []
         true_labels = []
         prediction_probas = []
 
-        for player_id in tqdm(test_data["features"].keys()):
-            # Create player data dictionary
-            player_data = {
-                "features": test_data["features"][player_id],
-                "windows": test_data["windows"][player_id],
-            }
+        if not test_data:
+            print(f"Loaded data for Game {game_number} is empty. Skipping.")
+            continue
 
+        # Check if there are any player records
+        if len(test_data) == 0:
+            print(
+                f"No player data found for Game {game_number}. Skipping metrics calculation."
+            )
+            continue
+
+        for player_data in tqdm(test_data):
             # Get prediction from model
             prompt = create_prompt(player_data, game_number)
             pred, prob = predictor.predict(prompt)
 
-            if pred is not None:
+            if pred is not None and prob is not None:
                 predictions.append(pred)
-                true_labels.append(int(test_data["windows"][player_id]["churned"]))
-                prediction_probas.append(prob)
+                try:
+                    true_labels.append(int(player_data["churned"]))
+                except KeyError:
+                    print(
+                        f"Warning: 'churned' key not found for player {player_data.get('player_id', 'unknown')} in game {game_number}. Skipping this player for metrics."
+                    )
+                    continue  # Skip if true label is missing
+                except ValueError:
+                    print(
+                        f"Warning: 'churned' value for player {player_data.get('player_id', 'unknown')} in game {game_number} is not a valid integer. Skipping this player for metrics."
+                    )
+                    continue  # Skip if true label is not valid int
 
-        # Calculate metrics
+                prediction_probas.append(prob)
+            else:
+                print(
+                    f"Warning: Could not get prediction for player {player_data.get('player_id', 'unknown')} in game {game_number}."
+                )
+
+        # Calculate metrics only if there are predictions
+        if not predictions or not true_labels:
+            print(
+                f"No valid predictions or true labels to evaluate for Game {game_number}."
+            )
+            continue
+
         metrics = evaluate_predictions(
             np.array(true_labels), np.array(predictions), np.array(prediction_probas)
         )
@@ -203,13 +272,23 @@ def main():
         # Print metrics
         print(f"\nMetrics for {args.model.upper()} on Game {game_number}:")
         for metric, value in metrics.items():
-            print(f"{metric}: {value:.4f}")
-
-        # Save metrics
-        output_file = f"processed_data/{args.model}_metrics_game{game_number}.json"
-        with open(output_file, "w") as f:
-            json.dump(metrics, f, indent=4)
-        print(f"Metrics saved to {output_file}")
+            if isinstance(value, float):
+                print(f"{metric}: {value:.4f}")
+            else:
+                print(f"{metric}: {value}")  # Save metrics
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        output_file = os.path.join(
+            script_dir,
+            "data",
+            "processed",
+            f"{args.model}_metrics_game{game_number}.json",
+        )
+        try:
+            with open(output_file, "w") as f:
+                json.dump(metrics, f, indent=4)
+            print(f"Metrics saved to {output_file}")
+        except IOError:
+            print(f"Error: Could not write metrics to {output_file}")
 
 
 if __name__ == "__main__":
