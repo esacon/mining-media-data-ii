@@ -98,6 +98,64 @@ To further support the evaluation, the following visualizations are included:
 
 These images provide a visual summary of feature importance for each model and a direct comparison of model performance metrics for both games.
 
+## LLM-based Churn Prediction or Analysis
+
+In addition to traditional machine learning models, we implemented and evaluated a **DistilBERT-based** approach for churn prediction. This transformer-based model was tested on both games to explore the potential of natural language processing techniques for player behavior analysis.
+
+### DistilBERT Model Performance
+
+#### Game 1 Results
+- **Accuracy:** 50.00%
+- **Precision:** 50.00%
+- **Recall:** 100.00%
+- **F1 Score:** 66.67%
+- **AUC-ROC:** 0.00
+
+#### Game 2 Results
+- **Accuracy:** 50.00%
+- **Precision:** 50.00%
+- **Recall:** 100.00%
+- **F1 Score:** 66.67%
+- **AUC-ROC:** 0.00
+
+### Analysis of LLM Results
+
+The DistilBERT model showed **significantly poorer performance** compared to the traditional machine learning approaches:
+
+1. **Random Performance**: The 50% accuracy across both games suggests the model is performing at random chance level, indicating it has not learned meaningful patterns from the data.
+
+2. **Perfect Recall, Poor Precision**: The 100% recall with 50% precision indicates the model is classifying all or most players as churned, which is not useful for practical churn prediction.
+
+3. **Zero AUC-ROC**: An AUC-ROC score of 0.00 suggests the model has no discriminative ability between churned and non-churned players.
+
+4. **Consistent Poor Performance**: The identical metrics across both games suggest systematic issues with either:
+   - Data preprocessing for the LLM model
+   - Feature representation incompatibility with transformer architectures
+   - Model configuration or training issues
+
+### Comparison with Traditional ML Models
+
+| Model Type | Game 1 Accuracy | Game 2 Accuracy | Best Traditional ML |
+|------------|------------------|------------------|-------------------|
+| **DistilBERT** | 50.00% | 50.00% | Poor |
+| **Logistic Regression** | 92.91% | 78.15% | Excellent |
+| **Random Forest** | 92.82% | 77.83% | Very Good |
+| **Decision Tree** | 89.62% | 68.53% | Good |
+
+The traditional machine learning models significantly outperformed the LLM-based approach, with **Logistic Regression achieving ~43-28 percentage points higher accuracy** than DistilBERT.
+
+### Recommendations for LLM Approaches
+
+1. **Feature Engineering**: The current numerical features may not be suitable for transformer models. Consider creating textual representations of player behavior patterns.
+
+2. **Model Architecture**: Explore specialized architectures designed for tabular data or time series, rather than text-focused transformers.
+
+3. **Data Preprocessing**: Investigate different ways to represent player behavioral data that align better with LLM input expectations.
+
+4. **Hybrid Approaches**: Consider combining traditional ML features with LLM-generated embeddings or insights.
+
+For this churn prediction task, **traditional machine learning models remain the superior choice**, particularly Logistic Regression and Random Forest, which demonstrate both high accuracy and practical interpretability.
+
 ## Project Structure Overview
 
 Below is a summary of the key modules involved in the pipeline:
