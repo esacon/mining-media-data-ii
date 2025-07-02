@@ -73,7 +73,6 @@ def load_dataset(game_number, dataset_type):
         raise
 
 
-
 def create_prompt(player_data, game_number):
     """Create a prompt for the model based on player data."""
     # Extract features from the flat player data structure
@@ -293,7 +292,6 @@ def main():
             print(f"Metrics saved to {output_file}")
         except IOError:
             print(f"Error: Could not write metrics to {output_file}")
-
 
 
 if __name__ == "__main__":

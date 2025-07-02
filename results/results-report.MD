@@ -3,19 +3,19 @@
 ## Data processing
 ### Data Sources and Preparation
 
-- **Game 1 Data:**  
+- **Game 1 Data:**
     - Structured as `.jsonl` files under `src/data/processed/game1_player_events.jsonl` (both eval and train sets), generated using `data_preparation.py`.
 
-- **Churn Labeling:**  
+- **Churn Labeling:**
     - Churn prediction is based on an 80% threshold over a churn prediction period of 10 days, using `dataset_creation.py`.
 
-- **Feature Engineering:**  
+- **Feature Engineering:**
     - Features are prepared for both games using `feature_engineering.py` (we use the reward in game 2 as the score):
 
-        - **Game 1 Features:**  
+        - **Game 1 Features:**
             `playCount`, `bestScore`, `meanScore`, `worstScore`, `sdScore`, `bestScoreIndex`, `bestSubMeanCount`, `bestSubMeanRatio`, `activeDuration`, `consecutivePlayRatio`
 
-        - **Game 2 Features:**  
+        - **Game 2 Features:**
             `playCount`, `bestScore`, `meanScore`, `worstScore`, `sdScore`, `bestScoreIndex`, `bestSubMeanCount`, `bestSubMeanRatio`, `activeDuration`, `consecutivePlayRatio`, `purchaseCount`, `highestPrice`
 
 ## Models Used
