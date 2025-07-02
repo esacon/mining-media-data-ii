@@ -17,7 +17,8 @@ from .time_utils import (
     format_duration,
     get_time_boundaries,
 )
-
+from .language_utils import DatasetFileLocator, LanguagePairMapper
+    
 __all__ = [
     # Logging utilities
     "setup_logger",
@@ -43,4 +44,7 @@ __all__ = [
     "_get_player_id_from_record",
     # Report utilities
     "generate_performance_report",
+    # Language utilities
+    "DatasetFileLocator",
+    "LanguagePairMapper",
 ]
